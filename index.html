@@ -1,0 +1,45 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title id="title">BrowserV2</title>
+
+    <style>
+
+        * {
+            margin: 0px;
+            padding: 0px;
+        }
+
+        body {
+            background-color: rgb(25, 25, 25);
+            color: aliceblue;
+            margin: 0px;
+        }
+
+        .layer-text {
+            width: 100%;
+            position: absolute;
+            z-index: 1;
+            bottom: 0;
+            padding: 0 36px 36px;
+        }
+            
+        .layer-text h3 {
+            text-align: center;
+            font-size: 32px;
+            background-color: rgba(0, 0, 0, 0.3);
+        }
+
+
+    </style>
+
+</head>
+<body oncontextmenu="return false">
+
+    <h1 id="MainTitle" style="display: none; position: absolute; transform: translate(100px,100px);">Hello there</h1>
+
+    <div id="scroll-views" style="margin: 10px;"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
