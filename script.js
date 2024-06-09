@@ -16,7 +16,7 @@ let queryedlist;
 let item_w, item_h;
 let TopScrollView = document.getElementById('scroll-views');
 let MainTitle = document.getElementById('MainTitle');
-let visual_pictures_row = 4;
+let visual_pictures_row = 3;
 let visual_pictures_col = 4;
 
 function runquery() {
@@ -85,16 +85,16 @@ function randChoice(arr) {
 
 function makeitem(w,h,x,y,fname,text) {
     let ret;
-    let imgpath = '';
     
     let belowdirseekpath = `${parampath}/${fname}`;
-    console.log(`belowdirseekpath - ${belowdirseekpath}`);
+    // console.log(`belowdirseekpath - ${belowdirseekpath}`);
 
     const jsondata = JSON.parse(dirseek(belowdirseekpath));
 
     if(jsondata["ret"]) // openable directory
     {
         let dirbelowimgs = [];
+        let imgvalid = false;
 
         jsondata["data"].forEach(each => {
             const name = each["d"];
@@ -104,41 +104,47 @@ function makeitem(w,h,x,y,fname,text) {
             if(fnameext == 'jpeg' || fnameext == 'jpg') dirbelowimgs.push(name);
         })
 
-        if(dirbelowimgs.length == 0)
-            imgpath = '';
-        else
-            imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
+        if(dirbelowimgs.length > 0) imgvalid = true;
 
-        ret = `<div class="item" style="width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
+        ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
                 <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >` +
 
                 (parampathgiven ? 
                 `<a href="${document.location.href}/${fname}"></a>` :
-                `<a href="${document.location.href}?p=${fname}"></a>` ) +
+                `<a href="${document.location.href}?p=${fname}"></a>`) +
 
                     `<div class="layer-text" style="box-sizing:border-box">
                         <h3>${text}</h3>
-                    </div>
-                    <img src="${imgpath}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>
-                </div>
-            </div>`
+                    </div>` +
+
+                    (imgvalid ?
+                    `<img src="${belowdirseekpath + "/" + randChoice(dirbelowimgs)}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
+                    ``) +
+
+                `</div>
+            </div>` 
     }
     else // just A File
     {
-        let imgvisible = false;
+        let imgvalid = false;
     
         let fnameext = fname.substring(fname.lastIndexOf('.')+1);
-        if(fnameext == 'jpeg' || fnameext == 'jpg') imgvisible = true;
-        if(imgvisible) imgpath = parampath + "/" + fname;
+        if(fnameext == 'jpeg' || fnameext == 'jpg') imgvalid = true;
+      
+        ret = 
+        `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
+            <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >\
+                <div class="layer-text" style="box-sizing:border-box">
+                    <h3>${text}</h3>
+                </div>` +
 
-        ret = `<div class="item" style="width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
-                <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >\
-                    <div class="layer-text" style="box-sizing:border-box">
-                        <h3>${text}</h3>
-                    </div>
-                    <img src="${imgpath}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>
-                </div>
-            </div>`
+                (imgvalid ? 
+                `<img src="${parampath + "/" + fname}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
+                ``) +
+                
+            `</div>
+        </div>`;
+
     }
 
     return ret;
