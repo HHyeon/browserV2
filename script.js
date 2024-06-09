@@ -1,12 +1,12 @@
 
 const urlParams = (new URL(window.location.href)).searchParams;
 let parampath = urlParams.get('p');
-let parampathgiven = false;
+let parampathgiven = true;
 
-if(parampath != null || parampath != undefined)
-    if(parampath[parampath.length-1] == '/') parampath = parampath.substring(0, parampath.length-1);
+if(parampath == '.' || parampath == null)
+    parampathgiven = false;
 else
-    parampathgiven = true;
+    if(parampath[parampath.length-1] == '/') parampath = parampath.substring(0, parampath.length-1);
 
 if(parampath == null) parampath = '.';
 // console.log(`parampath - ${parampath}`);
@@ -91,10 +91,12 @@ function makeitem(w,h,x,y,fname,text) {
 
     const jsondata = JSON.parse(dirseek(belowdirseekpath));
 
+    let isdir = false;
+    let imgvalid = false;
+    let imgpath;
     if(jsondata["ret"]) // openable directory
     {
         let dirbelowimgs = [];
-        let imgvalid = false;
 
         jsondata["data"].forEach(each => {
             const name = each["d"];
@@ -105,54 +107,45 @@ function makeitem(w,h,x,y,fname,text) {
         })
 
         if(dirbelowimgs.length > 0) imgvalid = true;
+        imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
 
-        ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
-                <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >` +
-
-                (parampathgiven ? 
-                `<a href="${document.location.href}/${fname}"></a>` :
-                `<a href="${document.location.href}?p=${fname}"></a>`) +
-
-                    `<div class="layer-text" style="box-sizing:border-box">
-                        <h3>${text}</h3>
-                    </div>` +
-
-                    (imgvalid ?
-                    `<img src="${belowdirseekpath + "/" + randChoice(dirbelowimgs)}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
-                    ``) +
-
-                `</div>
-            </div>` 
+        isdir = true;
     }
     else // just A File
     {
-        let imgvalid = false;
-    
         let fnameext = fname.substring(fname.lastIndexOf('.')+1);
         if(fnameext == 'jpeg' || fnameext == 'jpg') imgvalid = true;
-      
-        ret = 
-        `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
-            <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >\
-                <div class="layer-text" style="box-sizing:border-box">
-                    <h3>${text}</h3>
-                </div>` +
 
-                (imgvalid ? 
-                `<img src="${parampath + "/" + fname}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
-                ``) +
-                
-            `</div>
-        </div>`;
-
+        imgpath = parampath + "/" + fname;
     }
+
+    
+
+    ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
+    <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >` +
+
+    (isdir ? 
+    (parampathgiven ? 
+    `<a href="${document.location.href}/${fname}"></a>` :
+    `<a href="${document.location.href}?p=${fname}"></a>`)
+    : '') +
+
+        `<div class="layer-text" style="box-sizing:border-box">
+            <h3>${text}</h3>
+        </div>` +
+
+        (imgvalid ?
+        `<img src="${imgpath}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
+        ``) +
+
+        `</div>
+    </div>`;
+
 
     return ret;
 }
 
 function startup() {
-    item_w = TopScrollView.clientWidth/visual_pictures_row;
-    item_h = item_w/3*4; // height/width be 4:3 ratio
 
     const jsondata=JSON.parse(dirseek(parampath)); // runquery()
     if(jsondata["ret"])
@@ -189,14 +182,28 @@ function startup() {
             );
         });
 
+        let imgfilescnt = queryedlist.filter(x => x["d"].endsWith('jpeg') || x["d"].endsWith('jpg')).length;
+        let filescnt = queryedlist.length;
+
+        if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list. -> Single Row mode
+            visual_pictures_row = 1;
+        }
+
+        item_w = TopScrollView.clientWidth/visual_pictures_row;
+        item_h = item_w/3*4; // height/width be 4:3 ratio
+
         refreshinginfinitylist();
-        MainTitle.style.display = 'none';
+    }
+    else {
+        MainTitle.style.display = 'block';
     }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    let viewhei = Math.floor(queryedlist.length/visual_pictures_row) * item_h;
-    TopScrollView.style.height = viewhei;
+    if(queryedlist != undefined) {
+        let viewhei = Math.floor(queryedlist.length/visual_pictures_row) * item_h;
+        TopScrollView.style.height = viewhei;
+    }
 }, false)
 
 startup();
