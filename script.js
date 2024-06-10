@@ -79,48 +79,98 @@ window.addEventListener("scroll", function(e) {
 
 });
 
+function extractlastnumberfromfilename(str) {
+    let dotpos = str.lastIndexOf('.');
+    if(dotpos == -1) return -1;
+    let src1 = str.substring(0, dotpos);
+
+    if(isNaN(src1))
+    {
+        let cut=-1;
+        for(let i=src1.length-1;i>=0;i--)
+        {
+            if(isNaN(src1[i]))
+            {
+                cut = i+1;
+                break;
+            } 
+        }
+    
+        if(cut == -1) return -1;
+        let res = src1.substring(cut);
+        return Number(res);
+    }
+    else 
+    {
+        console.log(`Number`);
+        return Number(src1);
+    }
+}
+
 function randChoice(arr) {
     return arr[Math.floor(Math.random() * arr.length)]
 }
 
+let makeitem_Store = [];
+
 function makeitem(w,h,x,y,fname,text) {
     let ret;
     
-    let belowdirseekpath = `${parampath}/${fname}`;
-    // console.log(`belowdirseekpath - ${belowdirseekpath}`);
-
-    const jsondata = JSON.parse(dirseek(belowdirseekpath));
-
     let isdir = false;
     let imgvalid = false;
-    let imgpath;
-    if(jsondata["ret"]) // openable directory
-    {
-        let dirbelowimgs = [];
+    let imgpath = '';
 
-        jsondata["data"].forEach(each => {
-            const name = each["d"];
-            const time = each["t"];
+    let makeitem_stored = undefined;
+
+    if(makeitem_Store.length > 0)
+        makeitem_stored = makeitem_Store.filter(x => x.fname == fname);
+
+    console.log(`makeitem_stored - ${makeitem_stored}`);
+
+    if(makeitem_stored == undefined || makeitem_stored == '') {
+        let belowdirseekpath = `${parampath}/${fname}`;
+        const jsondata = JSON.parse(dirseek(belowdirseekpath));
+        if(jsondata["ret"]) // openable directory
+        {
+            let dirbelowimgs = [];
+    
+            jsondata["data"].forEach(each => {
+                const name = each["d"];
+                const time = each["t"];
+                
+                let fnameext = name.substring(name.lastIndexOf('.')+1);
+                if(fnameext == 'jpeg' || fnameext == 'jpg') dirbelowimgs.push(name);
+            })
+    
+            if(dirbelowimgs.length > 0) {
+                imgvalid = true;
+                imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
+            }
             
-            let fnameext = name.substring(name.lastIndexOf('.')+1);
-            if(fnameext == 'jpeg' || fnameext == 'jpg') dirbelowimgs.push(name);
-        })
-
-        if(dirbelowimgs.length > 0) imgvalid = true;
-        imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
-
-        isdir = true;
+            isdir = true;
+        }
+        else // just A File
+        {
+            let fnameext = fname.substring(fname.lastIndexOf('.')+1);
+            if(fnameext == 'jpeg' || fnameext == 'jpg') imgvalid = true;
+    
+            imgpath = parampath + "/" + fname;
+        }
+    
+        makeitem_Store.push({
+            fname: fname,
+            isdir: isdir,
+            imgvalid: imgvalid,
+            imgpath: imgpath
+        });
     }
-    else // just A File
-    {
-        let fnameext = fname.substring(fname.lastIndexOf('.')+1);
-        if(fnameext == 'jpeg' || fnameext == 'jpg') imgvalid = true;
-
-        imgpath = parampath + "/" + fname;
+    else {
+        isdir = makeitem_stored[0].isdir;
+        imgvalid = makeitem_stored[0].imgvalid;
+        imgpath = makeitem_stored[0].imgpath;
     }
 
     
-
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >` +
 
@@ -135,7 +185,7 @@ function makeitem(w,h,x,y,fname,text) {
         </div>` +
 
         (imgvalid ?
-        `<img src="${imgpath}" alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
+        `<img src="${imgpath}" loading=eager alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
         ``) +
 
         `</div>
@@ -155,7 +205,7 @@ function startup() {
         queryedlist.forEach(each => {
 
             const name = each["d"];
-            const time = each["t"];
+            const time = Date.parse(each["t"]);
             
             let imgtext;
             try
@@ -178,15 +228,23 @@ function startup() {
                 {
                     fname: name,
                     text: imgtext,
+                    time: time
                 }
             );
         });
 
+        dirlist.sort((a,b) => { return b.time - a.time; });
+
         let imgfilescnt = queryedlist.filter(x => x["d"].endsWith('jpeg') || x["d"].endsWith('jpg')).length;
         let filescnt = queryedlist.length;
 
-        if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list. -> Single Row mode
+        if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
+            // Single Row mode
             visual_pictures_row = 1;
+            // sort by name
+            dirlist.sort((a,b) => {
+                return extractlastnumberfromfilename(a.fname) - extractlastnumberfromfilename(b.fname);
+            });
         }
 
         item_w = TopScrollView.clientWidth/visual_pictures_row;
