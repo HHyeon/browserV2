@@ -125,8 +125,6 @@ function makeitem(w,h,x,y,fname,text) {
     if(makeitem_Store.length > 0)
         makeitem_stored = makeitem_Store.filter(x => x.fname == fname);
 
-    console.log(`makeitem_stored - ${makeitem_stored}`);
-
     if(makeitem_stored == undefined || makeitem_stored == '') {
         let belowdirseekpath = `${parampath}/${fname}`;
         const jsondata = JSON.parse(dirseek(belowdirseekpath));
@@ -185,7 +183,7 @@ function makeitem(w,h,x,y,fname,text) {
         </div>` +
 
         (imgvalid ?
-        `<img src="${imgpath}" loading=eager alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
+        `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
         ``) +
 
         `</div>
@@ -196,6 +194,10 @@ function makeitem(w,h,x,y,fname,text) {
 }
 
 function startup() {
+
+    visual_pictures_row = Math.floor(window.innerWidth / 400);
+
+    dirlist = [];
 
     const jsondata=JSON.parse(dirseek(parampath)); // runquery()
     if(jsondata["ret"])
@@ -239,6 +241,8 @@ function startup() {
         let filescnt = queryedlist.length;
 
         if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
+            // Eliminate none-jpg/jpeg file
+            queryedlist = queryedlist.filter(x => x["d"].endsWith('jpeg') || x["d"].endsWith('jpg'));
             // Single Row mode
             visual_pictures_row = 1;
             // sort by name
@@ -267,5 +271,5 @@ document.addEventListener("DOMContentLoaded", () => {
 startup();
 
 window.addEventListener("resize", () => {
-    // startup();
+    startup();
 });
