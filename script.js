@@ -12,7 +12,6 @@ if(parampath == null) parampath = '.';
 // console.log(`parampath - ${parampath}`);
 
 let dirlist = [];
-let queryedlist;
 let item_w, item_h;
 let TopScrollView = document.getElementById('scroll-views');
 let MainTitle = document.getElementById('MainTitle');
@@ -168,24 +167,22 @@ function makeitem(w,h,x,y,fname,text) {
         imgpath = makeitem_stored[0].imgpath;
     }
 
+
+    let linkelemnts = (isdir ? 
+        (parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`) 
+        : '');
+
+    let imgelements =  (imgvalid ?
+    `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
+    ``);
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >` +
-
-    (isdir ? 
-    (parampathgiven ? 
-    `<a href="${document.location.href}/${fname}"></a>` :
-    `<a href="${document.location.href}?p=${fname}"></a>`)
-    : '') +
-
+        linkelemnts +
         `<div class="layer-text" style="box-sizing:border-box">
             <h3>${text}</h3>
         </div>` +
-
-        (imgvalid ?
-        `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
-        ``) +
-
+        imgelements +
         `</div>
     </div>`;
 
@@ -202,7 +199,7 @@ function startup() {
     const jsondata=JSON.parse(dirseek(parampath)); // runquery()
     if(jsondata["ret"])
     {
-        queryedlist = jsondata["data"];
+        let queryedlist = jsondata["data"];
 
         queryedlist.forEach(each => {
 
@@ -235,35 +232,45 @@ function startup() {
             );
         });
 
-        dirlist.sort((a,b) => { return b.time - a.time; });
+        if(dirlist.length > 0) {
+            dirlist.sort((a,b) => { return b.time - a.time; });
 
-        let imgfilescnt = queryedlist.filter(x => x["d"].endsWith('jpeg') || x["d"].endsWith('jpg')).length;
-        let filescnt = queryedlist.length;
+            let imgfilescnt = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg')).length;
+            let filescnt = dirlist.length;
+    
+            if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
+                // Eliminate none-jpg/jpeg file
+                dirlist = imgfilescnt;
+                // Single Row mode
+                visual_pictures_row = 1;
+                // sort by name
+                dirlist.sort((a,b) => {
+                    return extractlastnumberfromfilename(a.fname) - extractlastnumberfromfilename(b.fname);
+                });
+            }
 
-        if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
-            // Eliminate none-jpg/jpeg file
-            queryedlist = queryedlist.filter(x => x["d"].endsWith('jpeg') || x["d"].endsWith('jpg'));
-            // Single Row mode
-            visual_pictures_row = 1;
-            // sort by name
-            dirlist.sort((a,b) => {
-                return extractlastnumberfromfilename(a.fname) - extractlastnumberfromfilename(b.fname);
-            });
+            item_w = TopScrollView.clientWidth/visual_pictures_row;
+            item_h = item_w/3*4; // height/width be 4:3 ratio
+
+            refreshinginfinitylist();
+        }
+        else {
+            MainTitle.style.display = 'block';
+            MainTitle.innerText = `no files in ${parampath}`;
         }
 
-        item_w = TopScrollView.clientWidth/visual_pictures_row;
-        item_h = item_w/3*4; // height/width be 4:3 ratio
 
-        refreshinginfinitylist();
+
     }
     else {
         MainTitle.style.display = 'block';
+        MainTitle.innerText = `${parampath} dirseek Error`;
     }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    if(queryedlist != undefined) {
-        let viewhei = Math.floor(queryedlist.length/visual_pictures_row) * item_h;
+    if(dirlist.length > 0) {
+        let viewhei = Math.floor(dirlist.length/visual_pictures_row) * item_h;
         TopScrollView.style.height = viewhei;
     }
 }, false)
