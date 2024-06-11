@@ -101,7 +101,6 @@ function extractlastnumberfromfilename(str) {
     }
     else 
     {
-        console.log(`Number`);
         return Number(src1);
     }
 }
@@ -235,12 +234,12 @@ function startup() {
         if(dirlist.length > 0) {
             dirlist.sort((a,b) => { return b.time - a.time; });
 
-            let imgfilescnt = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg')).length;
+            let imgfiles = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg'));
             let filescnt = dirlist.length;
     
-            if(imgfilescnt / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
+            if(imgfiles.length / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
                 // Eliminate none-jpg/jpeg file
-                dirlist = imgfilescnt;
+                dirlist = imgfiles;
                 // Single Row mode
                 visual_pictures_row = 1;
                 // sort by name
