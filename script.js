@@ -1,6 +1,8 @@
 
 const urlParams = (new URL(window.location.href)).searchParams;
 let parampath = urlParams.get('p');
+if(parampath != null || parampath == '')
+    document.title = parampath.substring(parampath.lastIndexOf('/')+1, parampath.length);
 let parampathgiven = true;
 
 if(parampath == '.' || parampath == null)
@@ -50,6 +52,11 @@ function refreshinginfinitylist()
         
         TopScrollView.innerHTML += makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
     }
+
+    // document.querySelectorAll('video').forEach(v => {
+    //     v.currentTime = 30;
+    // });
+    
 }
 
 let scrolleditemidx = 0;
@@ -114,9 +121,11 @@ let makeitem_Store = [];
 function makeitem(w,h,x,y,fname,text) {
     let ret;
     
-    let isdir = false;
-    let imgvalid = false;
+    let item_dir = false;
+    let item_img = false;
     let imgpath = '';
+    let item_vid = false;
+    let vidpath = '';
 
     let makeitem_stored = undefined;
 
@@ -128,6 +137,8 @@ function makeitem(w,h,x,y,fname,text) {
         const jsondata = JSON.parse(dirseek(belowdirseekpath));
         if(jsondata["ret"]) // openable directory
         {
+            item_dir = true;
+
             let dirbelowimgs = [];
     
             jsondata["data"].forEach(each => {
@@ -139,52 +150,57 @@ function makeitem(w,h,x,y,fname,text) {
             })
     
             if(dirbelowimgs.length > 0) {
-                imgvalid = true;
+                item_img = true;
                 imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
             }
             
-            isdir = true;
         }
         else // just A File
         {
             let fnameext = fname.substring(fname.lastIndexOf('.')+1);
-            if(fnameext == 'jpeg' || fnameext == 'jpg') imgvalid = true;
-    
-            imgpath = parampath + "/" + fname;
+
+            if(fnameext == 'jpeg' || fnameext == 'jpg') {
+                item_img = true;
+                imgpath = parampath + "/" + fname;
+            }
+            else if(fnameext == 'mp4') {
+                item_vid = true; 
+                vidpath = parampath + "/" + fname;
+            }
         }
     
         makeitem_Store.push({
             fname: fname,
-            isdir: isdir,
-            imgvalid: imgvalid,
-            imgpath: imgpath
+            item_dir: item_dir,
+            item_img: item_img,
+            imgpath: imgpath,
+            item_vid: item_vid,
+            vidpath: vidpath
         });
     }
     else {
-        isdir = makeitem_stored[0].isdir;
-        imgvalid = makeitem_stored[0].imgvalid;
+        item_dir = makeitem_stored[0].item_dir;
+        item_img = makeitem_stored[0].item_img;
         imgpath = makeitem_stored[0].imgpath;
+        item_vid = makeitem_stored[0].item_vid;
+        vidpath = makeitem_stored[0].vidpath;
     }
 
 
-    let linkelemnts = (isdir ? 
-        (parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`) 
-        : '');
-
-    let imgelements =  (imgvalid ?
-    `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>` :
-    ``);
+    let linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
+    let imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
+    let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
-    <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%;" >` +
-        linkelemnts +
+    <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">` +
         `<div class="layer-text" style="box-sizing:border-box">
             <h3>${text}</h3>
         </div>` +
-        imgelements +
+        (item_dir ? linkelemnts : '') +
+        (item_img ? imgelements : '') +
+        // (item_vid ? videlements : '') +
         `</div>
     </div>`;
-
 
     return ret;
 }
@@ -235,9 +251,8 @@ function startup() {
             dirlist.sort((a,b) => { return b.time - a.time; });
 
             let imgfiles = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg'));
-            let filescnt = dirlist.length;
     
-            if(imgfiles.length / filescnt  > 0.9) { // At Over 90% JPG/JPEG in list.
+            if(imgfiles.length / dirlist.length  > 0.9) { // At Over 90% JPG/JPEG in list.
                 // Eliminate none-jpg/jpeg file
                 dirlist = imgfiles;
                 // Single Row mode
@@ -249,7 +264,7 @@ function startup() {
             }
 
             item_w = TopScrollView.clientWidth/visual_pictures_row;
-            item_h = item_w/3*4; // height/width be 4:3 ratio
+            item_h = item_w/3*4;
 
             refreshinginfinitylist();
         }
@@ -273,6 +288,16 @@ document.addEventListener("DOMContentLoaded", () => {
         TopScrollView.style.height = viewhei;
     }
 }, false)
+
+document.addEventListener('keydown', (e) => {
+    console.log(e.key);
+
+    if(e.key == 'Backspace') {
+        let link = window.location.href;
+        window.location = link.substring(0, link.lastIndexOf('/'))
+    }
+
+});
 
 startup();
 
