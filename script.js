@@ -121,7 +121,7 @@ let makeitem_Store = [];
 function makeitem(w,h,x,y,fname,text) {
     let ret;
     
-    let item_dir = false;
+    let item_enterable = false;
     let item_img = false;
     let imgpath = '';
     let item_vid = false;
@@ -138,7 +138,7 @@ function makeitem(w,h,x,y,fname,text) {
             const jsondata = JSON.parse(dirseek(belowdirseekpath));
             if(jsondata["ret"]) // openable directory
             {
-                item_dir = true;
+                item_enterable = true;
     
                 let dirbelowimgs = [];
         
@@ -158,6 +158,8 @@ function makeitem(w,h,x,y,fname,text) {
             }
             else // just A File
             {
+                console.log(`path ${belowdirseekpath} is not Enterable`);
+
                 let fnameext = fname.substring(fname.lastIndexOf('.')+1);
     
                 if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') {
@@ -176,7 +178,7 @@ function makeitem(w,h,x,y,fname,text) {
         
         makeitem_Store.push({
             fname: fname,
-            item_dir: item_dir,
+            item_enterable: item_enterable,
             item_img: item_img,
             imgpath: imgpath,
             item_vid: item_vid,
@@ -184,20 +186,27 @@ function makeitem(w,h,x,y,fname,text) {
         });
     }
     else {
-        item_dir = makeitem_stored[0].item_dir;
+        item_enterable = makeitem_stored[0].item_enterable;
         item_img = makeitem_stored[0].item_img;
         imgpath = makeitem_stored[0].imgpath;
         item_vid = makeitem_stored[0].item_vid;
         vidpath = makeitem_stored[0].vidpath;
     }
 
+    let linkelemnts;
+
     if(item_vid)
     {
-        
+        item_enterable = true;
+        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath} target="_blank"></a>`
     }
-
-    let linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
+    else
+    {
+        linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
+    }
+    
     let imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
+    
     let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
@@ -205,7 +214,7 @@ function makeitem(w,h,x,y,fname,text) {
         `<div class="layer-text" style="box-sizing:border-box">
             <h3>${text}</h3>
         </div>` +
-        (item_dir ? linkelemnts : '') +
+        (item_enterable ? linkelemnts : '') +
         (item_img ? imgelements : '') +
         // (item_vid ? videlements : '') +
         `</div>
