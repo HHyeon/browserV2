@@ -134,41 +134,46 @@ function makeitem(w,h,x,y,fname,text) {
 
     if(makeitem_stored == undefined || makeitem_stored == '') {
         let belowdirseekpath = `${parampath}/${fname}`;
-        const jsondata = JSON.parse(dirseek(belowdirseekpath));
-        if(jsondata["ret"]) // openable directory
-        {
-            item_dir = true;
-
-            let dirbelowimgs = [];
+        try {
+            const jsondata = JSON.parse(dirseek(belowdirseekpath));
+            if(jsondata["ret"]) // openable directory
+            {
+                item_dir = true;
     
-            jsondata["data"].forEach(each => {
-                const name = each["d"];
-                const time = each["t"];
+                let dirbelowimgs = [];
+        
+                jsondata["data"].forEach(each => {
+                    const name = each["d"];
+                    const time = each["t"];
+                    
+                    let fnameext = name.substring(name.lastIndexOf('.')+1);
+                    if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') dirbelowimgs.push(name);
+                })
+        
+                if(dirbelowimgs.length > 0) {
+                    item_img = true;
+                    imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
+                }
                 
-                let fnameext = name.substring(name.lastIndexOf('.')+1);
-                if(fnameext == 'jpeg' || fnameext == 'jpg') dirbelowimgs.push(name);
-            })
+            }
+            else // just A File
+            {
+                let fnameext = fname.substring(fname.lastIndexOf('.')+1);
     
-            if(dirbelowimgs.length > 0) {
-                item_img = true;
-                imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
-            }
-            
-        }
-        else // just A File
-        {
-            let fnameext = fname.substring(fname.lastIndexOf('.')+1);
-
-            if(fnameext == 'jpeg' || fnameext == 'jpg') {
-                item_img = true;
-                imgpath = parampath + "/" + fname;
-            }
-            else if(fnameext == 'mp4') {
-                item_vid = true; 
-                vidpath = parampath + "/" + fname;
+                if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') {
+                    item_img = true;
+                    imgpath = parampath + "/" + fname;
+                }
+                else if(fnameext == 'mp4') {
+                    item_vid = true; 
+                    vidpath = parampath + "/" + fname;
+                }
             }
         }
-    
+        catch(ex) {
+            console.log(ex);
+        }
+        
         makeitem_Store.push({
             fname: fname,
             item_dir: item_dir,
@@ -186,6 +191,10 @@ function makeitem(w,h,x,y,fname,text) {
         vidpath = makeitem_stored[0].vidpath;
     }
 
+    if(item_vid)
+    {
+        
+    }
 
     let linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
     let imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
@@ -250,7 +259,7 @@ function startup() {
         if(dirlist.length > 0) {
             dirlist.sort((a,b) => { return b.time - a.time; });
 
-            let imgfiles = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg'));
+            let imgfiles = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg') || x.fname.endsWith('png'));
     
             if(imgfiles.length / dirlist.length  > 0.9) { // At Over 90% JPG/JPEG in list.
                 // Eliminate none-jpg/jpeg file
