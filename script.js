@@ -207,7 +207,7 @@ async function makeitem(w,h,x,y,fname,text) {
                     item_img = true;
                     imgpath = parampath + "/" + fname;
                 }
-                else if(fnameext == 'mp4') {
+                else if(fnameext == 'mp4' || fnameext == 'mov') {
                     item_vid = true; 
                     vidpath = parampath + "/" + fname;
                     
@@ -249,11 +249,11 @@ async function makeitem(w,h,x,y,fname,text) {
     if(item_vid)
     {
         item_enterable = true;
-        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath} target="_blank"></a>`
+        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${encodeURI(vidpath)} target="_blank"></a>`
     }
     else
     {
-        linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
+        linkelemnts = parampathgiven ? `<a href="${document.location.href}/${encodeURI(fname)}"></a>` : `<a href="${document.location.href}?p=${encodeURI(fname)}"></a>`;
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
