@@ -139,6 +139,8 @@
                 setCookie('parampath', '', 0);
             }
             console.log(`parampath: ${parampath}`);
+            
+            document.title = parampath.substring(parampath.lastIndexOf('/')+1);
 
             let paramfind = getCookie('paramfind');
             if(paramfind == '')

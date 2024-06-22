@@ -36,7 +36,50 @@ function dirseek(param) {
     return xmlhttp.responseText;
 };
 
-function refreshinginfinitylist()
+
+let DBSession;
+
+function indexedDB_init() {
+    const request = window.indexedDB.open('customed-web-browser');
+    
+    request.onupgradeneeded = (e) => {
+        console.log('onupgradeneeded');
+        let result = e.target.result.createObjectStore('thumbnailstore', {keyPath: 'filename'});
+        // result.createIndex('filename', 'filename', {unique: false});
+        // result.createIndex('filedata', 'filedata', {unique: false});
+    }
+
+    request.onsuccess = (e) => {
+        DBSession = request.result;
+        
+        startup();
+    }
+    
+    request.onerror = (e) => {
+        console.error('indexedDB Error');
+    }
+}
+
+async function indexedDB_get(filename) {
+    const transaction = DBSession.transaction(['thumbnailstore'], 'readwrite');
+    const store = transaction.objectStore('thumbnailstore');
+
+    return new Promise( (resolve) => {
+        const resp = store.get(filename);
+    
+        resp.onsuccess = () => {
+            resolve(resp.result);
+        }
+    
+        resp.onerror = () => {
+            console.error("indexedDB_get Failed");
+            resolve(null);    
+        }
+    });
+    
+}
+
+async function refreshinginfinitylist()
 {
     TopScrollView.innerHTML = '';
 
@@ -50,7 +93,7 @@ function refreshinginfinitylist()
         if(dirlist.length <= pos) break;
         let dirlist_item = dirlist[pos];
         
-        TopScrollView.innerHTML += makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
+        TopScrollView.innerHTML += await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
     }
 
     // document.querySelectorAll('video').forEach(v => {
@@ -67,7 +110,7 @@ window.addEventListener("scroll", function(e) {
     scrolleditemidx = Math.floor(window.scrollY / item_h);
     if(scrolleditemidx != scrolleditemidx_store)
     {
-        // console.log(`scrolleditemidx - ${scrolleditemidx}`);
+        console.log(`scrolleditemidx - ${scrolleditemidx}`);
 
         refreshinginfinitylist();
 
@@ -118,7 +161,7 @@ function randChoice(arr) {
 
 let makeitem_Store = [];
 
-function makeitem(w,h,x,y,fname,text) {
+async function makeitem(w,h,x,y,fname,text) {
     let ret;
     
     let item_enterable = false;
@@ -158,8 +201,6 @@ function makeitem(w,h,x,y,fname,text) {
             }
             else // just A File
             {
-                console.log(`path ${belowdirseekpath} is not Enterable`);
-
                 let fnameext = fname.substring(fname.lastIndexOf('.')+1);
     
                 if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') {
@@ -169,6 +210,15 @@ function makeitem(w,h,x,y,fname,text) {
                 else if(fnameext == 'mp4') {
                     item_vid = true; 
                     vidpath = parampath + "/" + fname;
+                    
+                    let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
+                    const get_result = await indexedDB_get(name);
+                    if(get_result != undefined) // valid
+                    {
+                        item_img = true;
+                        imgpath = get_result['filedata'];
+                    }
+
                 }
             }
         }
@@ -194,6 +244,7 @@ function makeitem(w,h,x,y,fname,text) {
     }
 
     let linkelemnts;
+    let imgelements;
 
     if(item_vid)
     {
@@ -204,10 +255,9 @@ function makeitem(w,h,x,y,fname,text) {
     {
         linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
     }
-    
-    let imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
-    
-    let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
+
+    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
+    // let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">` +
@@ -284,6 +334,16 @@ function startup() {
             item_w = TopScrollView.clientWidth/visual_pictures_row;
             item_h = item_w/3*4;
 
+            visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
+
+            console.log(`visual_pictures_row ${visual_pictures_row}`);
+            console.log(`visual_pictures_col ${visual_pictures_col}`);
+            
+            if(dirlist.length > 0) {
+                let viewhei = (Math.floor(dirlist.length/visual_pictures_row)) * item_h;
+                TopScrollView.style.height = viewhei;
+            }
+
             refreshinginfinitylist();
         }
         else {
@@ -301,10 +361,7 @@ function startup() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    if(dirlist.length > 0) {
-        let viewhei = Math.floor(dirlist.length/visual_pictures_row) * item_h;
-        TopScrollView.style.height = viewhei;
-    }
+    indexedDB_init();
 }, false)
 
 document.addEventListener('keydown', (e) => {
@@ -316,8 +373,6 @@ document.addEventListener('keydown', (e) => {
     }
 
 });
-
-startup();
 
 window.addEventListener("resize", () => {
     startup();
