@@ -8,10 +8,15 @@ let parampathgiven = true;
 if(parampath == '.' || parampath == null)
     parampathgiven = false;
 else
+{
     if(parampath[parampath.length-1] == '/') parampath = parampath.substring(0, parampath.length-1);
+
+    parampath = encodeURI(parampath);
+}
 
 if(parampath == null) parampath = '.';
 // console.log(`parampath - ${parampath}`);
+
 
 let dirlist = [];
 let item_w, item_h;
@@ -60,6 +65,28 @@ function indexedDB_init() {
     }
 }
 
+function indexedDB_addvalue(filename, filedata, videocurrentpos, evt) {
+    const transaction = DBSession.transaction(['thumbnailstore'], 'readwrite');
+    const store = transaction.objectStore('thumbnailstore');
+    
+    const item = {
+        filename: `${filename}`,
+        filedata: `${filedata}`,
+        position: `${videocurrentpos}`
+    }
+    
+    const resp = store.put(item);
+    
+    resp.onsuccess = () => {
+        evt(true);
+    }
+
+    resp.onerror = () => {
+        evt(false);
+        console.error("indexedDB_addvalue Failed");
+    }
+}
+
 async function indexedDB_get(filename) {
     const transaction = DBSession.transaction(['thumbnailstore'], 'readwrite');
     const store = transaction.objectStore('thumbnailstore');
@@ -96,10 +123,43 @@ async function refreshinginfinitylist()
         TopScrollView.innerHTML += await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
     }
 
-    // document.querySelectorAll('video').forEach(v => {
-    //     v.currentTime = 30;
-    // });
-    
+    document.querySelectorAll('video').forEach(seekvideo => {
+        let name0 = seekvideo.currentSrc;
+        name0 = name0.substring(name0.lastIndexOf('/')+1);
+        console.log(`seeking video ${name0}`);
+
+        seekvideo.currentTime = 30;
+        seekvideo.addEventListener('seeked', (seekedvideo) => {
+            let name = seekedvideo.target.src;
+            name = name.substring(name.lastIndexOf('/')+1);
+
+            const imagedatabase64 = video_to_image_base64(seekedvideo.target);
+            const targetvidtime = seekedvideo.target.currentTime;
+
+            indexedDB_addvalue(decodeURI(name), imagedatabase64, targetvidtime, async () => {
+                console.log(`cached - ${name} (${targetvidtime})`);
+                let applytoItemInfo = makeitem_Store.filter(x=>x.fname == name)[0];
+                if(applytoItemInfo != undefined)
+                {
+                    applytoItemInfo.need_video_load = false;
+                    applytoItemInfo.item_img = true;
+                    applytoItemInfo.imgpath = imagedatabase64;
+                }
+
+
+            });
+        });
+    });
+}
+
+function video_to_image_base64(video) {
+    const canvas = document.querySelector('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const scale = 0.5;
+    const canvasValue = canvas.toDataURL('image/jpeg', scale); // Base64 저장 - 0 ~ 1 퀄리티 범위
+    return canvasValue;
 }
 
 let scrolleditemidx = 0;
@@ -110,7 +170,7 @@ window.addEventListener("scroll", function(e) {
     scrolleditemidx = Math.floor(window.scrollY / item_h);
     if(scrolleditemidx != scrolleditemidx_store)
     {
-        console.log(`scrolleditemidx - ${scrolleditemidx}`);
+        // console.log(`scrolleditemidx - ${scrolleditemidx}`);
 
         refreshinginfinitylist();
 
@@ -168,6 +228,7 @@ async function makeitem(w,h,x,y,fname,text) {
     let item_img = false;
     let imgpath = '';
     let item_vid = false;
+    let need_video_load = false;
     let vidpath = '';
 
     let makeitem_stored = undefined;
@@ -176,9 +237,10 @@ async function makeitem(w,h,x,y,fname,text) {
         makeitem_stored = makeitem_Store.filter(x => x.fname == fname);
 
     if(makeitem_stored == undefined || makeitem_stored == '') {
+
         let belowdirseekpath = `${parampath}/${fname}`;
         try {
-            const jsondata = JSON.parse(dirseek(belowdirseekpath));
+            const jsondata = JSON.parse(dirseek(decodeURI(belowdirseekpath)));
             if(jsondata["ret"]) // openable directory
             {
                 item_enterable = true;
@@ -190,6 +252,9 @@ async function makeitem(w,h,x,y,fname,text) {
                     const time = each["t"];
                     
                     let fnameext = name.substring(name.lastIndexOf('.')+1);
+                    
+                    fnameext = fnameext.toLowerCase();
+                    
                     if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') dirbelowimgs.push(name);
                 })
         
@@ -208,15 +273,20 @@ async function makeitem(w,h,x,y,fname,text) {
                     imgpath = parampath + "/" + fname;
                 }
                 else if(fnameext == 'mp4' || fnameext == 'mov') {
-                    item_vid = true; 
+                    item_vid = true;
                     vidpath = parampath + "/" + fname;
-                    
                     let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
+
                     const get_result = await indexedDB_get(name);
                     if(get_result != undefined) // valid
                     {
+                        console.log(`prepared - ${name}`);
                         item_img = true;
                         imgpath = get_result['filedata'];
+                    }
+                    else // need to extract frame
+                    {
+                        need_video_load = true;
                     }
 
                 }
@@ -232,6 +302,7 @@ async function makeitem(w,h,x,y,fname,text) {
             item_img: item_img,
             imgpath: imgpath,
             item_vid: item_vid,
+            need_video_load: need_video_load,
             vidpath: vidpath
         });
     }
@@ -241,6 +312,7 @@ async function makeitem(w,h,x,y,fname,text) {
         imgpath = makeitem_stored[0].imgpath;
         item_vid = makeitem_stored[0].item_vid;
         vidpath = makeitem_stored[0].vidpath;
+        need_video_load = makeitem_stored[0].need_video_load;
     }
 
     let linkelemnts;
@@ -257,7 +329,7 @@ async function makeitem(w,h,x,y,fname,text) {
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
-    // let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
+    let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">` +
@@ -266,7 +338,7 @@ async function makeitem(w,h,x,y,fname,text) {
         </div>` +
         (item_enterable ? linkelemnts : '') +
         (item_img ? imgelements : '') +
-        // (item_vid ? videlements : '') +
+        (need_video_load ? videlements : '') +
         `</div>
     </div>`;
 
