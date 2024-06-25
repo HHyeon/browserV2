@@ -1,10 +1,16 @@
 
 const urlParams = (new URL(window.location.href)).searchParams;
-let parampath = urlParams.get('p');
-if(parampath != null || parampath == '')
-    document.title = parampath.substring(parampath.lastIndexOf('/')+1, parampath.length);
-let parampathgiven = true;
 
+
+let paramfind = urlParams.get('f');
+
+
+let parampath = urlParams.get('p');
+if(parampath != null)
+    document.title = parampath.substring(parampath.lastIndexOf('/')+1, parampath.length);
+
+
+let parampathgiven = true;
 if(parampath == '.' || parampath == null)
     parampathgiven = false;
 else
@@ -361,31 +367,36 @@ function startup() {
             const name = each["d"];
             const time = Date.parse(each["t"]);
             
-            let imgtext;
+            let ftext;
             try
             {
-                imgtext = name;
-                let p1 = imgtext.indexOf('/');
+                ftext = name;
+                let p1 = ftext.indexOf('/');
                 if(p1 >= 0)
                 {
-                    imgtext = imgtext.substring(p1+1, imgtext.length);
-                    p1 = imgtext.indexOf('/');
-                    imgtext = imgtext = imgtext.substring(0, p1);
+                    ftext = ftext.substring(p1+1, ftext.length);
+                    p1 = ftext.indexOf('/');
+                    ftext = ftext = ftext.substring(0, p1);
                 }
             }
             catch(ex) {
-                imgtext = '';
+                ftext = '';
                 console.log(ex);
             }
 
             dirlist.push(
                 {
                     fname: name,
-                    text: imgtext,
+                    text: ftext,
                     time: time
                 }
             );
         });
+
+        if(paramfind != null)
+        {
+            dirlist = dirlist.filter(x=> x.fname.toUpperCase().includes(paramfind.toUpperCase()));
+        }
 
         if(dirlist.length > 0) {
             dirlist.sort((a,b) => { return b.time - a.time; });
