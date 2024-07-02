@@ -138,11 +138,12 @@ async function refreshinginfinitylist()
         seekvideo.addEventListener('seeked', (seekedvideo) => {
             let name = seekedvideo.target.src;
             name = name.substring(name.lastIndexOf('/')+1);
+            name = decodeURI(name);
 
             const imagedatabase64 = video_to_image_base64(seekedvideo.target);
             const targetvidtime = seekedvideo.target.currentTime;
 
-            indexedDB_addvalue(decodeURI(name), imagedatabase64, targetvidtime, async () => {
+            indexedDB_addvalue(name, imagedatabase64, targetvidtime, async () => {
                 console.log(`cached - ${name} (${targetvidtime})`);
                 let applytoItemInfo = makeitem_Store.filter(x=>x.fname == name)[0];
                 if(applytoItemInfo != undefined)
@@ -193,6 +194,12 @@ window.addEventListener("scroll", function(e) {
     scrolleditemidx_store = scrolleditemidx;
 
 });
+
+function isImageExt(filename) {
+    let arg = filename.toLowerCase();
+    if(arg.endsWith('jpeg') || arg.endsWith('jpg') || arg.endsWith('png')) return true;
+    else return false;
+}
 
 function extractlastnumberfromfilename(str) {
     let dotpos = str.lastIndexOf('.');
@@ -246,7 +253,7 @@ async function makeitem(w,h,x,y,fname,text) {
 
         let belowdirseekpath = `${parampath}/${fname}`;
         try {
-            const jsondata = JSON.parse(dirseek(decodeURI(belowdirseekpath)));
+            const jsondata = JSON.parse(dirseek(belowdirseekpath));
             if(jsondata["ret"]) // openable directory
             {
                 item_enterable = true;
@@ -261,7 +268,7 @@ async function makeitem(w,h,x,y,fname,text) {
                     
                     fnameext = fnameext.toLowerCase();
                     
-                    if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') dirbelowimgs.push(name);
+                    if(isImageExt(fnameext)) dirbelowimgs.push(name);
                 })
         
                 if(dirbelowimgs.length > 0) {
@@ -274,7 +281,7 @@ async function makeitem(w,h,x,y,fname,text) {
             {
                 let fnameext = fname.substring(fname.lastIndexOf('.')+1);
     
-                if(fnameext == 'jpeg' || fnameext == 'jpg' || fnameext == 'png') {
+                if(isImageExt(fnameext)) {
                     item_img = true;
                     imgpath = parampath + "/" + fname;
                 }
@@ -293,6 +300,8 @@ async function makeitem(w,h,x,y,fname,text) {
                     else // need to extract frame
                     {
                         need_video_load = true;
+
+                        console.log(`video loading - ${name}`);
                     }
 
                 }
@@ -331,11 +340,11 @@ async function makeitem(w,h,x,y,fname,text) {
     }
     else
     {
-        linkelemnts = parampathgiven ? `<a href="${document.location.href}/${encodeURI(fname)}"></a>` : `<a href="${document.location.href}?p=${encodeURI(fname)}"></a>`;
+        linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
     }
 
-    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
-    let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
+    imgelements = `<img src="${encodeURI(imgpath)}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
+    let videlements = `<video buffered src=${encodeURI(vidpath)} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">` +
@@ -401,11 +410,11 @@ function startup() {
         if(dirlist.length > 0) {
             dirlist.sort((a,b) => { return b.time - a.time; });
 
-            let imgfiles = dirlist.filter(x => x.fname.endsWith('jpeg') || x.fname.endsWith('jpg') || x.fname.endsWith('png'));
+            let imgfiles = dirlist.filter(x => isImageExt(x.fname));
     
             if(imgfiles.length / dirlist.length  > 0.9) { // At Over 90% JPG/JPEG in list.
                 // Eliminate none-jpg/jpeg file
-                dirlist = imgfiles;
+                // dirlist = imgfiles;
                 // Single Row mode
                 visual_pictures_row = 1;
                 // sort by name
