@@ -343,7 +343,7 @@ async function makeitem(w,h,x,y,fname,text) {
         linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
     }
 
-    imgelements = `<img src="${encodeURI(imgpath)}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
+    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
     let videlements = `<video buffered src=${encodeURI(vidpath)} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
