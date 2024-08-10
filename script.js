@@ -287,7 +287,7 @@ async function makeitem(w,h,x,y,fname,text) {
                 }
                 else if(fnameext == 'mp4' || fnameext == 'mov') {
                     item_vid = true;
-                    vidpath = parampath + "/" + fname;
+                    vidpath = parampath + "/" + encodeURI(fname);
                     let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
 
                     const get_result = await indexedDB_get(name);
