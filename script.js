@@ -336,7 +336,7 @@ async function makeitem(w,h,x,y,fname,text) {
     if(item_vid)
     {
         item_enterable = true;
-        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${encodeURI(vidpath)} target="_blank"></a>`
+        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath} target="_blank"></a>`
     }
     else
     {
@@ -344,7 +344,7 @@ async function makeitem(w,h,x,y,fname,text) {
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
-    let videlements = `<video buffered src=${encodeURI(vidpath)} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
+    let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">` +
