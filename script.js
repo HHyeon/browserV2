@@ -28,6 +28,10 @@ let dirlist = [];
 let item_w, item_h;
 let TopScrollView = document.getElementById('scroll-views');
 let MainTitle = document.getElementById('MainTitle');
+let typing_panel = document.getElementById('typing_panel');
+
+let input_search = document.querySelector('.input_search');
+
 let visual_pictures_row = 3;
 let visual_pictures_col = 4;
 
@@ -285,7 +289,7 @@ async function makeitem(w,h,x,y,fname,text) {
                     item_img = true;
                     imgpath = parampath + "/" + fname;
                 }
-                else if(fnameext == 'mp4' || fnameext == 'mov') {
+                else if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') {
                     item_vid = true;
                     vidpath = parampath + "/" + encodeURI(fname);
                     let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
@@ -456,12 +460,71 @@ document.addEventListener("DOMContentLoaded", () => {
     indexedDB_init();
 }, false)
 
+let typingmode = 0;
+let typinginputstr = '';
+let typinginputsubmit = '';
+
 document.addEventListener('keydown', (e) => {
-    console.log(e.key);
+    
+    // console.log(e.key);
+
+    if(e.key.length == 1)
+    {
+        if(e.key.charCodeAt(0) >= ' '.charCodeAt(0) && e.key.charCodeAt(0) <= '~'.charCodeAt(0))
+        {
+            typingmode = 1;
+            document.getElementById('search_panel').style.visibility = '';
+            // console.log(e.key);
+            typinginputstr += e.key;
+            typing_panel.innerText = typinginputstr;
+        }
+    }
+    
+    if(e.key == 'Escape')
+    {
+        typingmode = 0;
+        typinginputstr = '';
+        typing_panel.innerText = typinginputstr;
+        document.getElementById('search_panel').style.visibility = 'hidden';
+    }
+    else if(e.key == 'Enter')
+    {
+        typingmode = 0;
+        typinginputsubmit = typinginputstr;
+        typinginputstr = '';
+        typing_panel.innerText = typinginputstr;
+        document.getElementById('search_panel').style.visibility = 'hidden';
+
+        if(typinginputsubmit != '')
+        {
+            window.location = `${window.location.href}&f=${typinginputsubmit}`;
+        }
+    }
 
     if(e.key == 'Backspace') {
-        let link = window.location.href;
-        window.location = link.substring(0, link.lastIndexOf('/'))
+
+        if(typingmode == 1)
+        {
+            if(typinginputstr.length > 0)
+            {
+                typinginputstr = typinginputstr.substr(0, typinginputstr.length-1)
+                typing_panel.innerText = typinginputstr;
+            }
+        }
+        else
+        {
+            let link = window.location.href;
+
+            if(link.substring(0, link.lastIndexOf('&f=')) != -1)
+            {
+                window.location = link.substring(0, link.lastIndexOf('&f='));
+            }
+            else
+            {
+                window.location = link.substring(0, link.lastIndexOf('/'));
+            }
+            
+        }
     }
 
 });
