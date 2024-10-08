@@ -344,7 +344,10 @@ async function makeitem(w,h,x,y,fname,text) {
     }
     else
     {
-        linkelemnts = parampathgiven ? `<a href="${document.location.href}/${fname}"></a>` : `<a href="${document.location.href}?p=${fname}"></a>`;
+        enter_element = document.location.href;
+        if(enter_element.lastIndexOf('&f=') != -1)
+            enter_element = enter_element.substring(0, enter_element.lastIndexOf('&f='));
+        linkelemnts = parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
@@ -514,13 +517,17 @@ document.addEventListener('keydown', (e) => {
         else
         {
             let link = window.location.href;
+            
 
-            if(link.substring(0, link.lastIndexOf('&f=')) != -1)
+            if(link.lastIndexOf('&f=') != -1)
             {
-                window.location = link.substring(0, link.lastIndexOf('&f='));
+                link = link.substring(0, link.lastIndexOf('&f='));
+                // console.log(`link - ${link}`);
+                window.location = link;
             }
             else
             {
+                console.log(`link - ${link.substring(0, link.lastIndexOf('/'))}`);
                 window.location = link.substring(0, link.lastIndexOf('/'));
             }
             
