@@ -340,7 +340,8 @@ async function makeitem(w,h,x,y,fname,text) {
     if(item_vid)
     {
         item_enterable = true;
-        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath} target="_blank"></a>`
+        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
+        console.log(linkelemnts);
     }
     else
     {
@@ -473,13 +474,16 @@ document.addEventListener('keydown', (e) => {
 
     if(e.key.length == 1)
     {
-        if(e.key.charCodeAt(0) >= ' '.charCodeAt(0) && e.key.charCodeAt(0) <= '~'.charCodeAt(0))
+        if(!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey)
         {
-            typingmode = 1;
-            document.getElementById('search_panel').style.visibility = '';
-            // console.log(e.key);
-            typinginputstr += e.key;
-            typing_panel.innerText = typinginputstr;
+            if(e.key.charCodeAt(0) >= ' '.charCodeAt(0) && e.key.charCodeAt(0) <= '~'.charCodeAt(0))
+            {
+                typingmode = 1;
+                document.getElementById('search_panel').style.visibility = '';
+                // console.log(e.key);
+                typinginputstr += e.key;
+                typing_panel.innerText = typinginputstr;
+            }
         }
     }
     
@@ -500,7 +504,7 @@ document.addEventListener('keydown', (e) => {
 
         if(typinginputsubmit != '')
         {
-            window.location = `${window.location.href}&f=${typinginputsubmit}`;
+            window.open(`${window.location.href}&f=${typinginputsubmit}`, '_blank');
         }
     }
 
