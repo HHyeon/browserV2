@@ -130,7 +130,15 @@ async function refreshinginfinitylist()
         if(dirlist.length <= pos) break;
         let dirlist_item = dirlist[pos];
         
-        TopScrollView.innerHTML += await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
+		if(dirlist_item != undefined)
+		{
+			TopScrollView.innerHTML += await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
+		}
+		else
+		{
+			console.log("dirlist is undefined !!!!");
+		}
+		
     }
 
     document.querySelectorAll('video').forEach(seekvideo => {
@@ -177,13 +185,19 @@ let scrolleditemidx = 0;
 let scrolleditemidx_store = 0;
 window.addEventListener("scroll", function(e) {
     // console.log(window.scrollY);
+	
+	if(dirlist.length == 0)
+	{
+		console.log("scroll skipp");
+		return;
+	}
 
     scrolleditemidx = Math.floor(window.scrollY / item_h);
     if(scrolleditemidx != scrolleditemidx_store)
     {
-        // console.log(`scrolleditemidx - ${scrolleditemidx}`);
-
-        refreshinginfinitylist();
+        console.log(`scrolleditemidx - ${scrolleditemidx}`);
+	
+		refreshinginfinitylist();
 
         // if(scrolleditemidx > scrolleditemidx_store)
         // {
@@ -294,6 +308,8 @@ async function makeitem(w,h,x,y,fname,text) {
                     vidpath = parampath + "/" + encodeURI(fname);
                     let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
 
+
+
                     const get_result = await indexedDB_get(name);
                     if(get_result != undefined) // valid
                     {
@@ -307,6 +323,29 @@ async function makeitem(w,h,x,y,fname,text) {
 
                         console.log(`video loading - ${name}`);
                     }
+					
+					
+					
+					
+					// let vidpath__;
+					
+					// for (let i = 0; i <= 4; i++)
+					// {
+						// const from = `drive_${i}`;
+						// const to = `drv${i}`;
+						// if (vidpath.includes(from))
+						// {
+							// vidpath__ = vidpath.replace(from, to);
+							// break; // 매칭된 경우 더 이상 검사할 필요 없음
+						// }
+					// }
+					
+					// console.log(`vidpath__ - ${vidpath__}`);
+					
+					// item_img = true;
+					// imgpath = `http://192.168.0.101:3000/api/thumbnail?path=${vidpath__}&time=60`
+					
+					
 
                 }
             }
@@ -444,7 +483,8 @@ function startup() {
                 TopScrollView.style.height = viewhei;
             }
 
-            refreshinginfinitylist();
+			refreshinginfinitylist();
+			
         }
         else {
             MainTitle.style.display = 'block';
