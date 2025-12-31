@@ -34,13 +34,43 @@
 
         .item a {
             padding: 3;
-            z-index: 5;
+            z-index: 1;
             position: absolute;
             width: 100%;
             margin: 0;
             height: 100%;
         }
 
+        .item {
+            border: 2px solid lightgray; /* 기본 상태 */
+        }
+                
+        .item:hover {
+            border: 2px solid #007bff; /* hover 시 테두리 강조 */
+        }
+        
+        .badge {
+            z-index: 2;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background-color: darkgrey;
+            color: black;
+            padding: 8px 16px;
+            font-size: 22px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .item-badge-link {
+            z-index: 3;
+            position: absolute;
+            inset: 0;              /* top/right/bottom/left: 0 */
+            text-decoration: none;
+            color: inherit;
+        }
+
+        
     </style>
 
 </head>
@@ -54,7 +84,7 @@
 
     <h1 id="MainTitle" style="position: absolute; transform: translate(100px,100px); display: none;">HelloThere</h1>
 
-    <div id="scroll-views" style="margin: 10px;"></div>
+    <div id="scroll-views" style="margin: 4px;"></div>
 
     <script src="script.js"></script>
 </body>

@@ -28,7 +28,8 @@
                 object-fit: contain;
                 object-position: 50% 50%;
                 filter: saturate(1) contrast(1) brightness(1);
-                transition: filter 0.3s ease;
+                /*transition: filter 0.3s ease;
+                transition: transform 0.2s ease-in-out;*/
             }
             
             #label1 {
@@ -154,13 +155,15 @@
             console.log(`paramfind: ${paramfind}`);
 
 
-
+            let player_paused_state = false;
             function pauseplay() {
-                if(player.paused) {
+                if(player_paused_state) {
+                    player_paused_state = false;
                     player.play();
                     setLabelText("play");
                 }
                 else {
+                    player_paused_state = true;
                     player.pause();
                     setLabelText("pause");
                 }
@@ -210,7 +213,60 @@
             }
 
             let setplaytime = false;
+            let videozoomfactor = 1.00;
+            let videozoomposY = 0;
 
+            window.addEventListener("wheel", function(e) {
+                if(e.deltaY > 0)
+                {
+                    if(!e.shiftKey)
+                    {
+                        if(videozoomfactor > 1.0)
+                        {
+                            videozoomfactor -= 0.2;
+                        }
+
+                        videozoomfactor = Math.round(videozoomfactor * 10) / 10;
+
+                        setLabelText(`zoom:  ${videozoomfactor}`);
+                    }
+                    else
+                    {
+                        if(videozoomfactor > 1.0) videozoomposY -= 100;
+                    }
+                    
+                    if(videozoomfactor == 1.0) videozoomposY = 0;
+
+                    player.style.transform = `translate(0px,${videozoomposY}px) scale(${videozoomfactor})`;
+
+                }
+                else
+                {
+                    if(!e.shiftKey)
+                    {
+                        if(videozoomfactor < 3.0)
+                        {
+                            videozoomfactor += 0.2;
+                        }
+                        else
+                        {
+                            videozoomposY = 0;
+                        }
+                        videozoomfactor = Math.round(videozoomfactor * 10) / 10;
+
+                        setLabelText(`zoom:  ${videozoomfactor}`);
+                    }
+                    else
+                    {
+                        if(videozoomfactor > 1.0) videozoomposY += 100;
+                    }
+
+                    if(videozoomfactor == 1.0) videozoomposY = 0;
+
+                    player.style.transform = `translate(0px,${videozoomposY}px) scale(${videozoomfactor})`;
+
+                }
+            });
 
             let muteState = false;
             let mutevolumestore = 0.00;
@@ -221,7 +277,17 @@
 
                 switch(param.key){
 
-
+                    case 'Backspace':
+                        if(player.style.visibility == '')
+                        {
+                            player.style.visibility='hidden';
+                        }
+                        else
+                        {
+                            player.style.visibility='';
+                        }
+                    break;
+                    
                     case 'm':
                         muteState = !muteState;
                         if(muteState)
@@ -253,7 +319,7 @@
                     else
                     {
                         player.style.transform = `scale(1, 1) rotate(${rotation_deg}deg)`;
-                        document.querySelector('video').style.objectFit='contain';
+                        player.style.objectFit='contain';
                     }
                     
                     break;
@@ -337,12 +403,12 @@
                     case '(':
                         if(video_cover_horizontal_moving > 0) video_cover_horizontal_moving--;
                         setLabelText(`${video_cover_horizontal_moving*5}%`);
-                        document.querySelector('video').style.objectPosition=`${video_cover_horizontal_moving*5}% 50%`
+                        player.style.objectPosition=`${video_cover_horizontal_moving*5}% 50%`
                         break;
                     case ')':
                         if(video_cover_horizontal_moving <= 19) video_cover_horizontal_moving++;
                         setLabelText(`${video_cover_horizontal_moving*5}%`);
-                        document.querySelector('video').style.objectPosition=`${video_cover_horizontal_moving*5}% 50%`
+                        player.style.objectPosition=`${video_cover_horizontal_moving*5}% 50%`
                         break;
 
 
@@ -360,15 +426,15 @@
                     break;
 
                     case '.':
-                        if(document.querySelector('video').style.objectFit == 'contain')
+                        if(player.style.objectFit == 'contain')
                         {
                             setLabelText("Fit To Window");
-                            document.querySelector('video').style.objectFit='cover';
+                            player.style.objectFit='cover';
                         }
                         else
                         {
                             setLabelText("Fit To Video");
-                            document.querySelector('video').style.objectFit='contain';
+                            player.style.objectFit='contain';
                         }
                             
                         break;
@@ -532,6 +598,8 @@
 
                 switch(param.button) {
                     case 0:
+                        console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
+
                         if(leftcancelnextclick) leftcancelnextclick = false;
                         else pauseplay();
                         break;
@@ -646,6 +714,7 @@
             document.addEventListener("mousemove", (param) => {
 
                 if(leftmousedowned) {
+                    console.log("mousemove !");
                     leftcancelnextclick = true;
 
                     let diff = param.x - leftmousedownpos;

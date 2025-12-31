@@ -122,8 +122,8 @@ async function refreshinginfinitylist()
 
     for(let i=0;i<visual_pictures_row*visual_pictures_col;i++)
     {
-        const pos_x = item_w * (i%visual_pictures_row);
-        const pos_y = item_h * (Math.floor(i/visual_pictures_row)+scrolleditemidx);
+        const pos_x = (item_w+1) * (i%visual_pictures_row);
+        const pos_y = (item_h+1) * (Math.floor(i/visual_pictures_row)+scrolleditemidx);
 
         let pos = i+(scrolleditemidx*visual_pictures_row);
 
@@ -184,7 +184,6 @@ function video_to_image_base64(video) {
 let scrolleditemidx = 0;
 let scrolleditemidx_store = 0;
 window.addEventListener("scroll", function(e) {
-    // console.log(window.scrollY);
 	
 	if(dirlist.length == 0)
 	{
@@ -195,7 +194,7 @@ window.addEventListener("scroll", function(e) {
     scrolleditemidx = Math.floor(window.scrollY / item_h);
     if(scrolleditemidx != scrolleditemidx_store)
     {
-        console.log(`scrolleditemidx - ${scrolleditemidx}`);
+        // console.log(`scrolleditemidx - ${scrolleditemidx}`);
 	
 		refreshinginfinitylist();
 
@@ -387,17 +386,48 @@ async function makeitem(w,h,x,y,fname,text) {
         enter_element = document.location.href;
         if(enter_element.lastIndexOf('&f=') != -1)
             enter_element = enter_element.substring(0, enter_element.lastIndexOf('&f='));
-        linkelemnts = parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
+
+        const belowpath = `${parampath}/${fname}`;
+        let belowpathlink = "";
+
+        if(belowpath.substr(0, 5) == 'drvs/')
+        {
+            belowpathlink = document.location.origin + "\\" + belowpath.substring(5, belowpath.length);
+            belowpathlink = belowpathlink.substring(5, belowpathlink.length);
+            belowpathlink = belowpathlink.replaceAll("/", "\\");
+
+            //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
+            belowpathlink = `maxview://open?path=${belowpathlink}`;
+
+            // console.log(`belowpathlink - ${belowpathlink}`);
+            
+            // fetch(`maxview://open?path=${belowpathlink}`);
+        }
+        else
+        {
+            console.log(`expect "drvs/" (${belowpath})`);
+        }
+
+        linkelemnts = `
+        <div class="badge">
+            maxview
+            <a href="${belowpathlink}" return false;" class="item-badge-link"></a>
+        </div>
+        `;
+
+        linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
+
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
     let videlements = `<video buffered src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
-    ret = `<div class="item" style="border: solid lightgray; width: ${w}px; height: ${h}px; transform: translate(${x}px, ${y}px); position: absolute;">
-    <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">` +
-        `<div class="layer-text" style="box-sizing:border-box">
+    ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; ">
+    <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">
+        <div class="layer-text" style="box-sizing:border-box">
             <h3>${text}</h3>
-        </div>` +
+        </div>
+        ` +
         (item_enterable ? linkelemnts : '') +
         (item_img ? imgelements : '') +
         (need_video_load ? videlements : '') +
@@ -405,6 +435,16 @@ async function makeitem(w,h,x,y,fname,text) {
     </div>`;
 
     return ret;
+}
+
+function maxviewsend(path)
+{
+    // const fetch_url = `http://localhost:5000/view?path=${encodeURIComponent(path)}`;
+
+    
+    // const img = new Image();
+    // img.src = fetch_url;
+
 }
 
 function startup() {
@@ -456,6 +496,7 @@ function startup() {
 
         if(dirlist.length > 0) {
             dirlist.sort((a,b) => { return b.time - a.time; });
+            dirlist.sort((a, b) => Number(b.text.endsWith(".mp4")) - Number(a.text.endsWith(".mp4")));
 
             let imgfiles = dirlist.filter(x => isImageExt(x.fname));
     
@@ -475,8 +516,8 @@ function startup() {
 
             visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
 
-            console.log(`visual_pictures_row ${visual_pictures_row}`);
-            console.log(`visual_pictures_col ${visual_pictures_col}`);
+            // console.log(`visual_pictures_row ${visual_pictures_row}`);
+            // console.log(`visual_pictures_col ${visual_pictures_col}`);
             
             if(dirlist.length > 0) {
                 let viewhei = (Math.floor(dirlist.length/visual_pictures_row)) * item_h;
@@ -501,6 +542,7 @@ function startup() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    // console.log("DOMContentLoaded");
     indexedDB_init();
 }, false)
 
@@ -545,6 +587,11 @@ document.addEventListener('keydown', (e) => {
         if(typinginputsubmit != '')
         {
             window.open(`${window.location.href}&f=${typinginputsubmit}`, '_blank');
+        }
+        else
+        {
+            makeitem_Store = [];
+            refreshinginfinitylist();
         }
     }
 
