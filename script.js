@@ -437,17 +437,53 @@ async function makeitem(w,h,x,y,fname,text) {
     return ret;
 }
 
-function maxviewsend(path)
-{
-    // const fetch_url = `http://localhost:5000/view?path=${encodeURIComponent(path)}`;
+function mulberry32(seed) {
+  return function () {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-    
-    // const img = new Image();
-    // img.src = fetch_url;
+function shuffleWithSeed(array, seed) {
+  const random = mulberry32(seed);
+  const result = [...array]; // 원본 보호
 
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+
+  return result;
+}
+
+function stringToSeed(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = Math.imul(31, hash) + str.charCodeAt(i);
+  }
+  return hash >>> 0;
+}
+
+function formatYYYYMMDD(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+
+  return `${yyyy}${mm}${dd}`;
 }
 
 function startup() {
+
+    let ordertype = localStorage.getItem('listordertype');
+
+    if(ordertype == null)
+    {
+        ordertype = 1;
+    }
+
+    console.log(`ordertype - ${ordertype}`);
 
     visual_pictures_row = Math.floor(window.innerWidth / 400);
 
@@ -495,7 +531,29 @@ function startup() {
         }
 
         if(dirlist.length > 0) {
-            dirlist.sort((a,b) => { return b.time - a.time; });
+            if(ordertype == 1)
+            {
+                dirlist.sort((a,b) => { return b.time - a.time; });
+            }
+            else if(ordertype == 2)
+            {
+                dirlist.sort((a, b) => {
+                    return a.fname.localeCompare(b.fname);
+                });
+            }
+            else if(ordertype == 3)
+            {
+                dirlist = shuffleWithSeed(dirlist, stringToSeed(formatYYYYMMDD(new Date())));
+            }
+            else if(ordertype == 4)
+            {
+                dirlist = shuffleWithSeed(dirlist, Math.random()*0xFFFFFFFF);
+            }
+            else
+            {
+                console.log(`ordertype unknown !!! ${ordertype}`);
+            }
+
             dirlist.sort((a, b) => Number(b.text.endsWith(".mp4")) - Number(a.text.endsWith(".mp4")));
 
             let imgfiles = dirlist.filter(x => isImageExt(x.fname));
@@ -546,7 +604,35 @@ document.addEventListener("DOMContentLoaded", () => {
     indexedDB_init();
 }, false)
 
-let typingmode = 0;
+function commandtyped(cmd)
+{
+    console.log(`cmd - ${cmd}`);
+
+    if(cmd == 'order1')
+    {
+        localStorage.setItem('listordertype', 1); // time
+        console.log('set order type 1');
+    }
+    else if(cmd == 'order2')
+    {
+        localStorage.setItem('listordertype', 2); // alphabet order
+        console.log('set order type 2');
+    }
+    else if(cmd == 'order3')
+    {
+        localStorage.setItem('listordertype', 3); // date-seed random
+        console.log('set order type 3');
+    }
+    else if(cmd == 'order4')
+    {
+        localStorage.setItem('listordertype', 4); // random
+        console.log('set order type 3');
+    }
+
+}
+
+let typingmodecmd = false;
+let typingmode = false;
 let typinginputstr = '';
 let typinginputsubmit = '';
 
@@ -554,14 +640,12 @@ document.addEventListener('keydown', (e) => {
     
     // console.log(e.key);
 
-    if(e.key.length == 1)
+    if(typingmode || typingmodecmd)
     {
-        if(!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey)
+        if(e.key.length == 1 && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey)
         {
             if(e.key.charCodeAt(0) >= ' '.charCodeAt(0) && e.key.charCodeAt(0) <= '~'.charCodeAt(0))
             {
-                typingmode = 1;
-                document.getElementById('search_panel').style.visibility = '';
                 // console.log(e.key);
                 typinginputstr += e.key;
                 typing_panel.innerText = typinginputstr;
@@ -571,33 +655,85 @@ document.addEventListener('keydown', (e) => {
     
     if(e.key == 'Escape')
     {
-        typingmode = 0;
-        typinginputstr = '';
-        typing_panel.innerText = typinginputstr;
-        document.getElementById('search_panel').style.visibility = 'hidden';
+        if(typingmode || typingmodecmd)
+        {
+            typingmode = false;
+            typingmodecmd = false;
+            typinginputstr = '';
+            typing_panel.innerText = typinginputstr;
+            document.getElementById('search_panel').style.visibility = 'hidden';
+        }
     }
     else if(e.key == 'Enter')
     {
-        typingmode = 0;
-        typinginputsubmit = typinginputstr;
-        typinginputstr = '';
-        typing_panel.innerText = typinginputstr;
-        document.getElementById('search_panel').style.visibility = 'hidden';
-
-        if(typinginputsubmit != '')
+        if(typingmodecmd)
         {
-            window.open(`${window.location.href}&f=${typinginputsubmit}`, '_blank');
+            typinginputsubmit = typinginputstr;
+            document.getElementById('search_panel').style.visibility = 'hidden';
+            typinginputstr = '';
+            typing_panel.innerText = typinginputstr;
+
+            // console.log(`typingmodecmd - ${typinginputsubmit}`);
+            commandtyped(typinginputsubmit);
+
+            typingmodecmd = false;
         }
         else
         {
-            makeitem_Store = [];
-            refreshinginfinitylist();
+            if(typingmode)
+            {
+                if(typinginputstr.length == 0)
+                {
+                    document.getElementById('search_panel').style.visibility = 'hidden';
+                }
+                else
+                {
+                    typinginputsubmit = typinginputstr;
+                    typinginputstr = '';
+                    typing_panel.innerText = typinginputstr;
+                    document.getElementById('search_panel').style.visibility = 'hidden';
+
+                    if(typinginputsubmit != '')
+                    {
+                        window.open(`${window.location.href}&f=${typinginputsubmit}`, '_blank');
+                    }
+                }
+            }
+            else
+            {
+                document.getElementById('search_panel').style.visibility = '';
+                typing_panel.innerText = typinginputstr;
+            }
+
+            typingmode = !typingmode;
         }
     }
+    else if(e.key == '`')
+    {
+        if(!typingmode)
+        {
+            if(typingmodecmd)
+            {
 
-    if(e.key == 'Backspace') {
+            }
+            else
+            {
+                document.getElementById('search_panel').style.visibility = '';
+                typing_panel.innerText = typinginputstr;
+            }
 
-        if(typingmode == 1)
+            typingmodecmd = !typingmodecmd;
+        }
+    }
+    else if(e.key == '\\')
+    {
+        makeitem_Store = [];
+        refreshinginfinitylist();
+    }
+    else if(e.key == 'Backspace')
+    {
+
+        if(typingmode || typingmodecmd)
         {
             if(typinginputstr.length > 0)
             {
@@ -618,8 +754,17 @@ document.addEventListener('keydown', (e) => {
             }
             else
             {
-                console.log(`link - ${link.substring(0, link.lastIndexOf('/'))}`);
-                window.location = link.substring(0, link.lastIndexOf('/'));
+                // console.log(`link - ${link.substring(0, link.lastIndexOf('/'))}`);
+
+                let linkbrowse = link.substring(0, link.lastIndexOf('/'));
+                if(linkbrowse.endsWith('drvs'))
+                {
+                    console.log('top reached');
+                }
+                else
+                {
+                    window.location = link.substring(0, link.lastIndexOf('/'));
+                }
             }
             
         }
