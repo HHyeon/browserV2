@@ -286,6 +286,7 @@ async function makeitem(w,h,x,y,fname,text) {
                     fnameext = fnameext.toLowerCase();
                     
                     if(isImageExt(fnameext)) dirbelowimgs.push(name);
+
                 })
         
                 if(dirbelowimgs.length > 0) {
@@ -397,6 +398,8 @@ async function makeitem(w,h,x,y,fname,text) {
             belowpathlink = belowpathlink.replaceAll("/", "\\");
 
             //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
+            //          `winexplr://open?path=\\192.168.100.101\drive_5\contents`
+            
             belowpathlink = `maxview://open?path=${belowpathlink}`;
 
             // console.log(`belowpathlink - ${belowpathlink}`);
@@ -408,13 +411,15 @@ async function makeitem(w,h,x,y,fname,text) {
             console.log(`expect "drvs/" (${belowpath})`);
         }
 
+        linkelemnts = ``;
+
         linkelemnts = `
         <div class="badge">
             maxview
             <a href="${belowpathlink}" return false;" class="item-badge-link"></a>
         </div>
         `;
-
+    
         linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
 
     }
@@ -553,7 +558,18 @@ function startup() {
             {
                 console.log(`ordertype unknown !!! ${ordertype}`);
             }
+            
+            dirlist = dirlist.filter(item => {
+                const text = item.text.toLowerCase();
+                // const hasExt = /\.[^/.]+$/.test(text);
 
+                return (
+                    (!text.endsWith(".jpg") && !text.endsWith(".jpeg"))
+                    || text.endsWith(".mp4")
+                    // || !hasExt
+                );
+            });
+            
             dirlist.sort((a, b) => Number(b.text.endsWith(".mp4")) - Number(a.text.endsWith(".mp4")));
 
             let imgfiles = dirlist.filter(x => isImageExt(x.fname));
@@ -767,6 +783,33 @@ document.addEventListener('keydown', (e) => {
                 }
             }
             
+        }
+    }
+    else if(e.key == 'o' || e.key == 'O')
+    {
+        // fetch
+
+        const belowpath = parampath;
+        let belowpathlink = "";
+
+        if(belowpath.substr(0, 5) == 'drvs/')
+        {
+            belowpathlink = document.location.origin + "\\" + belowpath.substring(5, belowpath.length);
+            belowpathlink = belowpathlink.substring(5, belowpathlink.length);
+            belowpathlink = belowpathlink.replaceAll("/", "\\");
+
+            //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
+            //          `winexplr://open?path=\\192.168.100.101\drive_5\contents`
+            
+            belowpathlink = `winexplr://open?path=${belowpathlink}`;
+
+            console.log(`belowpathlink - ${belowpathlink}`);
+            
+            fetch(belowpathlink);
+        }
+        else
+        {
+            console.log(`expect "drvs/" (${belowpath})`);
         }
     }
 
