@@ -36,6 +36,13 @@ const MOMENTUM_DAMPING = 0.8; // Reduced from 0.9 for 50% less inertia
 const MAX_PITCH = Math.PI * (45 / 180); // ~45 degrees - edge of VR180 content aligns with viewport edge
 const MAX_YAW = Math.PI * (45 / 180); // ~45 degrees - edge of VR180 content aligns with viewport edge
 
+// Camera Zoom Constants
+const MIN_FOV = 25;          // Maximum zoom (approximately 3x)
+const MAX_FOV = 100;          // Default FOV (no zoom)
+const ZOOM_STEP = 0.05;       // Zoom step per scroll/pinch event
+let cameraZoom = 1.3;        // Current zoom factor (1.0 = no zoom, 3.0 = 3x zoom)
+let lastTouchDistance = 0;    // For pinch gesture detection
+
 // Figma design constants (for layout reference)
 const FIGMA_PANEL_WIDTH_PX = 450;
 const FIGMA_PANEL_HEIGHT_PX = 132;
@@ -847,6 +854,14 @@ function hidePanel() {
 	}
 }
 
+function updateCameraFOV() {
+	if (!camera2D) return;
+	const fov = MAX_FOV / cameraZoom;
+	// console.log(`Updating Camera FOV: ${fov.toFixed(2)}`);	
+	camera2D.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
+	camera2D.updateProjectionMatrix();
+}
+
 function updateCanvasAspectRatio() {
   // 비디오의 실제 메타데이터 비율 기반으로 aspect-ratio 동적 설정
   const videoWidth = video.videoWidth;
@@ -946,6 +961,21 @@ function onMouseDown(event) {
 	
 	// Hide controls when dragging starts
 	hide2DControlPanel();
+}
+
+function onMouseWheel(event) {
+	if (!is2DMode) return;
+	event.preventDefault();
+	
+	// Zoom in (scroll up) or zoom out (scroll down)
+	const direction = event.deltaY > 0 ? -1 : 1;
+	cameraZoom += direction * ZOOM_STEP;
+	cameraZoom = Math.max(1.0, Math.min(3.0, cameraZoom));
+
+	// console.log(`Camera Zoom: ${cameraZoom.toFixed(2)}`);
+	
+	updateCameraFOV();
+	show2DControlPanel();
 }
 
 function onMouseMove(event) {
@@ -1450,7 +1480,7 @@ function start2DMode() {
 		
 		// Calculate height based on actual video aspect ratio
 		let calculatedHeight;
-		
+
 		const aspectRatio = window.innerWidth / window.innerHeight;
 		calculatedHeight = containerWidth / aspectRatio;
 		
@@ -1521,6 +1551,7 @@ function add2DEventListeners() {
 	renderer.domElement.addEventListener('mousedown', onMouseDown);
 	renderer.domElement.addEventListener('mousemove', onMouseMove);
 	renderer.domElement.addEventListener('mouseup', onMouseUp);
+	renderer.domElement.addEventListener('wheel', onMouseWheel);
 	
 	// Canvas-specific mouse movement for showing controls
 	renderer.domElement.addEventListener('mousemove', onCanvasMouseMove);
