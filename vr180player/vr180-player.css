@@ -1,0 +1,250 @@
+#vr-container {
+	position: relative;
+	display: inline-block;
+	width: 100%;
+}
+
+video {
+	width: 100%;
+	height: auto;
+}
+
+#playBtn {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	width: 80px;
+	height: 80px;
+	transition: opacity 0.3s ease, transform 0.2s ease;
+	z-index: 10;
+}
+
+#playBtn:hover {
+	transform: translate(-50%, -50%) scale(1.1);
+}
+
+#playBtn:active {
+	transform: translate(-50%, -50%) scale(0.95);
+}
+
+#playBtn.hidden {
+	opacity: 0;
+	pointer-events: none;
+}
+
+#playBtn img {
+	width: 100%;
+	height: 100%;
+}
+
+/* Responsive sizing */
+@media (max-width: 600px) {
+	#playBtn {
+		width: 60px;
+		height: 60px;
+	}
+}
+
+@media (min-width: 900px) {
+	#playBtn {
+		width: 100px;
+		height: 100px;
+	}
+}
+
+/* 2D Video Controls Panel */
+#panel {
+	position: absolute;
+	bottom: 10%;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 80%;
+	padding: 20px;
+	border-radius: 30px;
+	background: rgba(0, 0, 0, 0.70);
+	color: #fff;
+	font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+	z-index: 100;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.15s ease, visibility 0.15s ease;
+	pointer-events: none;
+}
+
+#panel.visible {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+}
+
+#status {
+	margin: 0 12px 12px 12px;
+}
+
+#video-title {
+	text-align: center;
+	margin: 0 0 16px 0;
+	font-size: 1rem;
+	font-weight: 500;
+}
+
+#current-time,
+#total-time {
+	margin: 0;
+	font-size: 0.875rem;
+	font-variant-numeric: tabular-nums;
+}
+
+#progress {
+	display: grid;
+	grid-template-columns: min-content 1fr min-content;
+	grid-gap: 8px;
+	align-items: center;
+}
+
+#bar {
+	width: 100%;
+	height: 4px;
+	border-radius: 2px;
+	background: #666;
+	cursor: pointer;
+	position: relative;
+}
+
+#played {
+	border-radius: 2px;
+	background: #fff;
+	height: 4px;
+	width: 0%;
+	transition: width 0.1s ease;
+}
+
+#controls {
+	display: grid;
+	grid-template-areas: "full lflex nav rflex mute";
+	grid-template-columns: 44px 1fr 156px 1fr 44px;
+	height: 44px;
+}
+
+#panel button {
+	cursor: pointer;
+	border: none;
+	background-color: transparent;
+}
+
+#fullscreen {
+	grid-area: full;
+	width: 44px;
+	height: 44px;
+	background-image: url(images/fullscreen.png);
+	background-size: 44px 44px;
+	background-repeat: no-repeat;
+	background-position: center;
+	transition: background-image 0.15s ease-in-out;
+}
+
+#fullscreen:hover {
+	background-image: url(images/fullscreen-hover.png);
+}
+
+#mute {
+	grid-area: mute;
+	width: 44px;
+	height: 44px;
+	background-image: url(images/mute.png);
+	background-size: 44px 44px;
+	background-repeat: no-repeat;
+	background-position: center;
+	transition: background-image 0.15s ease-in-out;
+}
+
+#mute:hover {
+	background-image: url(images/mute-hover.png);
+}
+
+#mute.muted {
+	background-image: url(images/mute.png);
+}
+
+#mute.muted:hover {
+	background-image: url(images/mute-hover.png);
+}
+
+#mute.unmuted {
+	background-image: url(images/unmute.png);
+}
+
+#mute.unmuted:hover {
+	background-image: url(images/unmute-hover.png);
+}
+
+#nav {
+	grid-area: nav;
+	display: grid;
+	grid-template-columns: 44px 44px 44px;
+	grid-gap: 12px;
+	height: 44px;
+}
+
+#back {
+	width: 44px;
+	height: 44px;
+	background-image: url(images/back.png);
+	background-size: 44px 44px;
+	background-repeat: no-repeat;
+	background-position: center;
+	transition: background-image 0.15s ease-in-out;
+}
+
+#back:hover {
+	background-image: url(images/back-hover.png);
+}
+
+#play2 {
+	width: 44px;
+	height: 44px;
+	background-image: url(images/play2.png);
+	background-size: 44px 44px;
+	background-repeat: no-repeat;
+	background-position: center;
+	transition: background-image 0.15s ease-in-out;
+}
+
+#play2:hover {
+	background-image: url(images/play2-hover.png);
+}
+
+#play2.paused {
+	background-image: url(images/play2.png);
+}
+
+#play2.paused:hover {
+	background-image: url(images/play2-hover.png);
+}
+
+#play2.playing {
+	background-image: url(images/pause.png);
+}
+
+#play2.playing:hover {
+	background-image: url(images/pause-hover.png);
+}
+
+#forward {
+	width: 44px;
+	height: 44px;
+	background-image: url(images/forward.png);
+	background-size: 44px 44px;
+	background-repeat: no-repeat;
+	background-position: center;
+	transition: background-image 0.15s ease-in-out;
+}
+
+#forward:hover {
+	background-image: url(images/forward-hover.png);
+}
