@@ -380,7 +380,7 @@ async function makeitem(w,h,x,y,fname,text) {
     {
         item_enterable = true;
         linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
-        console.log(linkelemnts);
+        // console.log(linkelemnts);
     }
     else
     {
@@ -399,12 +399,6 @@ async function makeitem(w,h,x,y,fname,text) {
 
             //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
             //          `winexplr://open?path=\\192.168.100.101\drive_5\contents`
-            
-            belowpathlink = `maxview://open?path=${belowpathlink}`;
-
-            // console.log(`belowpathlink - ${belowpathlink}`);
-            
-            // fetch(`maxview://open?path=${belowpathlink}`);
         }
         else
         {
@@ -414,9 +408,15 @@ async function makeitem(w,h,x,y,fname,text) {
         linkelemnts = ``;
 
         linkelemnts = `
-        <div class="badge">
-            maxview
-            <a href="${belowpathlink}" return false;" class="item-badge-link"></a>
+        <div class="badge-container">
+            <div class="badge">
+                maxview
+                <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
+            </div>
+            <div class="badge">
+                wexpl
+                <a href="winexplr://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
+            </div>
         </div>
         `;
     
@@ -479,7 +479,39 @@ function formatYYYYMMDD(date) {
   return `${yyyy}${mm}${dd}`;
 }
 
+
+const explorer_open_btn = document.getElementById('btn-open-explorer');
+
+explorer_open_btn.addEventListener('click', () => {
+
+    const belowpath = parampath;
+    let belowpathlink = "";
+
+    if(belowpath.substr(0, 5) == 'drvs/')
+    {
+        belowpathlink = document.location.origin + "\\" + belowpath.substring(5, belowpath.length);
+        belowpathlink = belowpathlink.substring(5, belowpathlink.length);
+        belowpathlink = belowpathlink.replaceAll("/", "\\");
+
+        //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
+        //          `winexplr://open?path=\\192.168.100.101\drive_5\contents`
+        
+        belowpathlink = `winexplr://open?path=${belowpathlink}`;
+
+        console.log(`winexplr link - ${belowpathlink}`);
+        
+        window.location.href = belowpathlink;
+    }
+    else
+    {
+        console.log(`expect "drvs/" (${belowpath})`);
+    }
+});
+
 function startup() {
+
+
+    
 
     let ordertype = localStorage.getItem('listordertype');
 
@@ -564,8 +596,11 @@ function startup() {
                 // const hasExt = /\.[^/.]+$/.test(text);
 
                 return (
-                    (!text.endsWith(".jpg") && !text.endsWith(".jpeg"))
-                    || text.endsWith(".mp4")
+                    !(
+                        text.endsWith(".jpg") ||
+                        text.endsWith(".jpeg") ||
+                        text.endsWith(".sh")
+                    ) || text.endsWith(".mp4")
                     // || !hasExt
                 );
             });
@@ -620,31 +655,19 @@ document.addEventListener("DOMContentLoaded", () => {
     indexedDB_init();
 }, false)
 
+function setordertype(type)
+{
+    if(type >= 1 && type <= 4)
+    {
+        localStorage.setItem('listordertype', type); // time
+        startup();
+    }
+}
+
+
 function commandtyped(cmd)
 {
     console.log(`cmd - ${cmd}`);
-
-    if(cmd == 'order1')
-    {
-        localStorage.setItem('listordertype', 1); // time
-        console.log('set order type 1');
-    }
-    else if(cmd == 'order2')
-    {
-        localStorage.setItem('listordertype', 2); // alphabet order
-        console.log('set order type 2');
-    }
-    else if(cmd == 'order3')
-    {
-        localStorage.setItem('listordertype', 3); // date-seed random
-        console.log('set order type 3');
-    }
-    else if(cmd == 'order4')
-    {
-        localStorage.setItem('listordertype', 4); // random
-        console.log('set order type 3');
-    }
-
 }
 
 let typingmodecmd = false;
@@ -783,33 +806,6 @@ document.addEventListener('keydown', (e) => {
                 }
             }
             
-        }
-    }
-    else if(e.key == 'o' || e.key == 'O')
-    {
-        // fetch
-
-        const belowpath = parampath;
-        let belowpathlink = "";
-
-        if(belowpath.substr(0, 5) == 'drvs/')
-        {
-            belowpathlink = document.location.origin + "\\" + belowpath.substring(5, belowpath.length);
-            belowpathlink = belowpathlink.substring(5, belowpathlink.length);
-            belowpathlink = belowpathlink.replaceAll("/", "\\");
-
-            //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
-            //          `winexplr://open?path=\\192.168.100.101\drive_5\contents`
-            
-            belowpathlink = `winexplr://open?path=${belowpathlink}`;
-
-            console.log(`belowpathlink - ${belowpathlink}`);
-            
-            fetch(belowpathlink);
-        }
-        else
-        {
-            console.log(`expect "drvs/" (${belowpath})`);
         }
     }
 

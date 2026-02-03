@@ -48,30 +48,115 @@
         .item:hover {
             border: 2px solid #007bff; /* hover 시 테두리 강조 */
         }
-        
+
+        .badge-container {
+        position: absolute;     /* ⭐ 위치는 컨테이너가 담당 */
+        top: 8px;
+        right: 8px;
+
+        display: flex;
+        flex-direction: column;
+        gap: 6px;               /* 세로 간격 */
+        z-index: 2;
+        }
+
         .badge {
-            z-index: 2;
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background-color: red;
-            color: black;
-            padding: 8px 16px;
-            font-size: 22px;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
+        position: relative;     /* 링크 덮기용 */
+        display: inline-flex;
+        align-items: center;
+
+        background-color: rgba(0, 155, 255, 0.5);
+        color: black;
+        padding: 8px 16px;
+        font-size: 22px;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
         }
 
         .item-badge-link {
-            z-index: 3;
-            position: absolute;
-            inset: 0;              /* top/right/bottom/left: 0 */
-            text-decoration: none;
-            color: inherit;
+        position: absolute;
+        inset: 0;               /* badge 전체 클릭 */
+        z-index: 3;
+        text-decoration: none;
+        color: inherit;
         }
 
+
+        #scroll-views {
+        width: 100%;
+        margin: 4px;
+        overflow-y: auto;
+        }
+
+        .layout {
+        height: 100vh;
+        }
+
+        .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+
+        width: 5%;
+        background: rgba(0, 155, 255, 0.3);
+        color: white;
+        padding: 20px;
+                
+        transform: translateX(-100%);     /* 기본 숨김 */
+        transition: transform 0.25s ease;
+        z-index: 1000;
         
+        display: flex;
+        align-items: center;             /* 세로 중앙 */
+        justify-content: center;         /* 가로 중앙 */
+        
+        }
+        
+        .sidebar-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;                       /* 버튼 간격 */
+        }
+
+        .sidebar-buttons button {
+        width: 100px;
+        height: 100px;
+
+        border: none;
+        border-radius: 12px;
+        background: #334155;
+        color: white;
+        font-size: 54px;
+        cursor: pointer;
+ 
+        align-items: center;             /* 세로 중앙 */
+        justify-content: center;         /* 가로 중앙 */
+
+        transition: background 0.2s, transform 0.15s;
+        }
+
+        .sidebar-buttons button:hover {
+        background: rgba(0, 155, 255, 0.5);
+        transform: scale(1.08);
+        }
+
+        .sidebar-trigger {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+
+        width: 5%;                      /* 살짝만 */
+        z-index: 999;
+        }
+
+        .sidebar-trigger:hover + .sidebar,
+        .sidebar:hover {
+        transform: translateX(0);
+        }
+
     </style>
 
 </head>
@@ -82,10 +167,28 @@
     </div>
 
     <canvas hidden></canvas>
-
+    
     <h1 id="MainTitle" style="position: absolute; transform: translate(100px,100px); display: none;">HelloThere</h1>
 
-    <div id="scroll-views" style="margin: 4px;"></div>
+    <div class="layout">
+
+        <div class="sidebar-trigger"></div>
+
+        <aside class="sidebar">
+            
+        <div class="sidebar-buttons">
+            <button id="btn-open-explorer">📁</button>
+            <button onclick="setordertype(1)">🕒</button>
+            <button onclick="setordertype(2)">🔤</button>
+            <button onclick="setordertype(3)">📅</button>
+            <button onclick="setordertype(4)">♻️</button>
+        </div>
+        
+        </aside>
+
+        <div id="scroll-views"></div>
+
+    </div>
 
     <script src="script.js"></script>
 </body>
