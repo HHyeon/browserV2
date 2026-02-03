@@ -93,12 +93,17 @@
             let currentfilename;
             let currentdir;
 
-            function dirseek(param) {
-                let xmlhttp = new XMLHttpRequest();
-                let url=`dirseek.php?x=${param}`;
-                xmlhttp.open("GET", url, false);
-                xmlhttp.send(null);
-                return xmlhttp.responseText;
+
+            async function dirseek(param) {
+                try {
+                    const encoded = encodeURIComponent(param);
+                    const res = await fetch(`dirseek.php?x=${encoded}`, { cache: 'no-store' });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return await res.json(); // { ret: bool, data: [...] }
+                } catch (e) {
+                    console.error('dirseek failed', e);
+                    return { ret: false, data: [] };
+                }
             };
 
             player.addEventListener("timeupdate", (event) => {
@@ -782,91 +787,96 @@
 
             });
 
-            if(parampath != null)
-            {
-                console.log(`parampath - ${parampath}`);
-                currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
-                currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
 
-                const jsonraw=dirseek(currentdir);
-                const jsondata=JSON.parse(jsonraw); 
+            async function startup() {
                 
-                if(jsondata["ret"])
+                if(parampath != null)
                 {
-                    dirlist = jsondata["data"];
+                    console.log(`parampath - ${parampath}`);
+                    currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
+                    currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
+
+                    const jsondata=await dirseek(currentdir); 
                     
-                    while(true) {  
-                        const find__ = dirlist.find((a) => { return a["d"][0] == '.';});
-                        if(find__ == undefined) break;
-                        // console.log(`ignore - ${find__["d"]}`);
-                        const idx = dirlist.lastIndexOf(find__);
-                        dirlist.splice(idx, 1);
-                    }
-
-                    while(true) {  
-                        const find__ = dirlist.find((a) => { return a["d"].substr(a["d"].lastIndexOf('.')) != ".mp4" });
-                        if(find__ == undefined) break;
-                        // console.log(`ignore - ${find__["d"]}`);
-                        const idx = dirlist.lastIndexOf(find__);
-                        dirlist.splice(idx, 1);
-                    }
-
-                }
-                
-                for(let i=0;i<dirlist.length;i++)
-                {
-                    dirlist[i]["t"] = Date.parse(dirlist[i]["t"]);
-                }
-                
-                dirlist.sort((a,b) => { return b["t"] - a["t"]; });
-
-                
-                if(paramfind != null)
-                {
-                    console.log(`filtering by ${paramfind}`);   
-                    
-                    dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
-                }
-
-
-                console.log(dirlist);
-
-                player = document.getElementById("player");
-                player.src = parampath;
-                player.addEventListener("playing", () => {
-                    if(setplaytime)
+                    if(jsondata["ret"])
                     {
-                        setplaytime = false;
-                        player.currentTime = (player.duration / 10) * (1+Math.random()*3.0);
-                        console.log(player.currentTime);
+                        dirlist = jsondata["data"];
+                        
+                        while(true) {  
+                            const find__ = dirlist.find((a) => { return a["d"][0] == '.';});
+                            if(find__ == undefined) break;
+                            // console.log(`ignore - ${find__["d"]}`);
+                            const idx = dirlist.lastIndexOf(find__);
+                            dirlist.splice(idx, 1);
+                        }
+
+                        while(true) {  
+                            const find__ = dirlist.find((a) => { return a["d"].substr(a["d"].lastIndexOf('.')) != ".mp4" });
+                            if(find__ == undefined) break;
+                            // console.log(`ignore - ${find__["d"]}`);
+                            const idx = dirlist.lastIndexOf(find__);
+                            dirlist.splice(idx, 1);
+                        }
+
                     }
-                });
+                    
+                    for(let i=0;i<dirlist.length;i++)
+                    {
+                        dirlist[i]["t"] = Date.parse(dirlist[i]["t"]);
+                    }
+                    
+                    dirlist.sort((a,b) => { return b["t"] - a["t"]; });
 
-                video_saturate = 1.0;
-                video_brightness = 1.0;
-                video_contrast = 1.0;
-                video_filter_set();
+                    
+                    if(paramfind != null)
+                    {
+                        console.log(`filtering by ${paramfind}`);   
+                        
+                        dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
+                    }
 
-                player.volume = 0.2;
-                
-                setLabelText(currentfilename);
 
-                // var promise = player.play();
+                    console.log(dirlist);
 
-                // if(promise != undefined) {
-                //     promise.then(_ => {
-                //         console.log("promise returned Successed");
-                //     }).catch(error => {
-                //         console.log("promise returned failed");
-                //     });
-                // }
+                    player = document.getElementById("player");
+                    player.src = parampath;
+                    player.addEventListener("playing", () => {
+                        if(setplaytime)
+                        {
+                            setplaytime = false;
+                            player.currentTime = (player.duration / 10) * (1+Math.random()*3.0);
+                            console.log(player.currentTime);
+                        }
+                    });
 
-                window.addEventListener("keydown", onKeydown);
+                    video_saturate = 1.0;
+                    video_brightness = 1.0;
+                    video_contrast = 1.0;
+                    video_filter_set();
+
+                    player.volume = 0.2;
+                    
+                    setLabelText(currentfilename);
+
+                    // var promise = player.play();
+
+                    // if(promise != undefined) {
+                    //     promise.then(_ => {
+                    //         console.log("promise returned Successed");
+                    //     }).catch(error => {
+                    //         console.log("promise returned failed");
+                    //     });
+                    // }
+
+                    window.addEventListener("keydown", onKeydown);
+                }
+                else
+                {
+                    console.log(`${parampath} is null`);
+                }
             }
-            else
-            {
-                console.log(`${parampath} is null`);
-            }
+
+            startup();
 
         </script>
 

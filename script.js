@@ -35,21 +35,19 @@ let input_search = document.querySelector('.input_search');
 let visual_pictures_row = 3;
 let visual_pictures_col = 4;
 
-function runquery() {
-    let xmlhttp = new XMLHttpRequest();
-    let url=`query.php`;
-    xmlhttp.open("GET", url, false);
-    xmlhttp.send(null);
-    return xmlhttp.responseText;
-};
 
-function dirseek(param) {
-    let xmlhttp = new XMLHttpRequest();
-    let url=`dirseek.php?x=${param}`;
-    xmlhttp.open("GET", url, false);
-    xmlhttp.send(null);
-    return xmlhttp.responseText;
-};
+async function dirseek(param) {
+    try {
+        // const encoded = encodeURIComponent(param);
+        const encoded = param;
+        const res = await fetch(`dirseek.php?x=${encoded}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json(); // { ret: bool, data: [...] }
+    } catch (e) {
+        console.error('dirseek failed', e);
+        return { ret: false, data: [] };
+    }
+}
 
 
 let DBSession;
@@ -270,7 +268,7 @@ async function makeitem(w,h,x,y,fname,text) {
 
         let belowdirseekpath = `${parampath}/${fname}`;
         try {
-            const jsondata = JSON.parse(dirseek(belowdirseekpath));
+            const jsondata = await dirseek(belowdirseekpath);
             if(jsondata["ret"]) // openable directory
             {
                 item_enterable = true;
@@ -508,10 +506,7 @@ explorer_open_btn.addEventListener('click', () => {
     }
 });
 
-function startup() {
-
-
-    
+async function startup() {
 
     let ordertype = localStorage.getItem('listordertype');
 
@@ -526,7 +521,7 @@ function startup() {
 
     dirlist = [];
 
-    const jsondata=JSON.parse(dirseek(parampath)); // runquery()
+    const jsondata = await dirseek(parampath);
     if(jsondata["ret"])
     {
         let queryedlist = jsondata["data"];
