@@ -114,6 +114,98 @@ async function indexedDB_get(filename) {
     
 }
 
+
+// 전역 변수 추가 (file 상단)
+let videoLoadQueue = [];        // 로드 대기 중인 비디오 정보
+let activeVideoLoads = 0;       // 현재 진행 중인 로드 개수
+const MAX_CONCURRENT_LOADS = 2; // 동시 로드 최대 개수
+
+
+// makeitem() 호출 후 추가할 함수
+async function processVideoLoadQueue() {
+    // 대기 중인 비디오가 있고, 동시 로드 제한 미만일 때만 처리
+    if (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
+        const videoInfo = videoLoadQueue.shift(); // 큐에서 제거
+        activeVideoLoads++;
+
+        console.log(`[VideoLoad] Starting ${videoInfo.name} (${activeVideoLoads}/${MAX_CONCURRENT_LOADS})`);
+
+        const videoElement = videoInfo.element;
+        if (!videoElement || !videoElement.parentElement) {
+            // 요소가 DOM에서 제거된 경우 스킵
+            activeVideoLoads--;
+            processVideoLoadQueue(); // 다음 항목 처리
+            return;
+        }
+
+        // 비디오 로드 시작
+        videoElement.currentTime += 30;
+
+        // seeked 이벤트: 1회만 처리
+        const handleSeeked = async (event) => {
+            videoElement.removeEventListener('seeked', handleSeeked);
+            
+            try {
+                const imagedatabase64 = video_to_image_base64(videoElement);
+                const targetvidtime = videoElement.currentTime;
+                const name = videoInfo.name;
+
+                // IndexedDB 저장
+                await new Promise(resolve => {
+                    indexedDB_addvalue(name, imagedatabase64, targetvidtime, () => {
+                        console.log(`[Cache] Saved ${name}`);
+                        if (makeitem_Store[name]) {
+                            makeitem_Store[name].need_video_load = false;
+                            makeitem_Store[name].item_img = true;
+                            makeitem_Store[name].imgpath = imagedatabase64;
+                        }
+                        resolve();
+                    });
+                });
+            } catch (ex) {
+                console.error(`[VideoLoad] Error processing ${videoInfo.name}`, ex);
+            } finally {
+                activeVideoLoads--;
+                clearTimeout(timeoutId);
+                clearInterval(removalCheckInterval);
+                processVideoLoadQueue(); // 다음 항목 처리
+            }
+        };
+
+        videoElement.addEventListener('seeked', handleSeeked, { once: true });
+
+        // 타임아웃: seeked 미발생 시 정리
+        const timeoutId = setTimeout(() => {
+            try { videoElement.removeEventListener('seeked', handleSeeked); } catch(e){}
+            clearInterval(removalCheckInterval);
+            console.warn(`[VideoLoad] Timeout - ${videoInfo.name}`);
+            activeVideoLoads--;
+            processVideoLoadQueue();
+        }, 10000);
+
+        // DOM 제거 감지(요소가 문서에서 사라지면 정리)
+        const removalCheckInterval = setInterval(() => {
+            if (!document.contains(videoElement) || !videoElement.isConnected) {
+                try { videoElement.removeEventListener('seeked', handleSeeked); } catch(e){}
+                clearTimeout(timeoutId);
+                clearInterval(removalCheckInterval);
+                console.warn(`[VideoLoad] Video element removed from DOM - ${videoInfo.name}`);
+                activeVideoLoads--;
+                processVideoLoadQueue();
+            }
+        }, 500);
+
+        // seek 에러 시에도 타임아웃/인터벌 정리
+        const originalOnError = videoElement.onerror;
+        videoElement.onerror = (ev) => {
+            try { clearTimeout(timeoutId); } catch(e){}
+            try { clearInterval(removalCheckInterval); } catch(e){}
+            if (originalOnError) try { originalOnError(ev); } catch(e){}
+        };
+    }
+}
+
+
 async function refreshinginfinitylist()
 {
     TopScrollView.innerHTML = '';
@@ -132,47 +224,34 @@ async function refreshinginfinitylist()
 		{
 			TopScrollView.innerHTML += await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
 		}
-		else
-		{
-			console.log("dirlist is undefined !!!!");
-		}
-		
     }
 
-    document.querySelectorAll('video').forEach(seekvideo => {
-        let name0 = seekvideo.currentSrc;
-        name0 = name0.substring(name0.lastIndexOf('/')+1);
-        console.log(`seeking video ${name0}`);
 
-        seekvideo.currentTime = 30;
-        seekvideo.addEventListener('seeked', (seekedvideo) => {
-            let name = seekedvideo.target.src;
-            name = name.substring(name.lastIndexOf('/')+1);
-            name = decodeURI(name);
+    
+    // 🔑 새 코드: 비디오를 큐에 추가하고 순차 처리 시작
+    document.querySelectorAll('video:not([data-video-queued])').forEach(videoElement => {
+        const videoName = videoElement.src.substring(videoElement.src.lastIndexOf('/') + 1);
+        
+        // 이미 처리됨 표시
+        videoElement.dataset.videoQueued = 'true';
 
-            const imagedatabase64 = video_to_image_base64(seekedvideo.target);
-            const targetvidtime = seekedvideo.target.currentTime;
-
-            indexedDB_addvalue(name, imagedatabase64, targetvidtime, async () => {
-                console.log(`cached - ${name} (${targetvidtime})`);
-                let applytoItemInfo = makeitem_Store.filter(x=>x.fname == name)[0];
-                if(applytoItemInfo != undefined)
-                {
-                    applytoItemInfo.need_video_load = false;
-                    applytoItemInfo.item_img = true;
-                    applytoItemInfo.imgpath = imagedatabase64;
-                }
-
-
-            });
+        // 큐에 추가
+        videoLoadQueue.push({
+            name: decodeURI(videoName),
+            element: videoElement
         });
+
+        console.log(`[Queue] Added ${videoName}`);
     });
+
+    // 큐 처리 시작
+    processVideoLoadQueue();
 }
 
 function video_to_image_base64(video) {
     const canvas = document.querySelector('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth/2;
+    canvas.height = video.videoHeight/2;
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     const scale = 0.5;
     const canvasValue = canvas.toDataURL('image/jpeg', scale); // Base64 저장 - 0 ~ 1 퀄리티 범위
@@ -247,7 +326,7 @@ function randChoice(arr) {
     return arr[Math.floor(Math.random() * arr.length)]
 }
 
-let makeitem_Store = [];
+let makeitem_Store = {};
 
 async function makeitem(w,h,x,y,fname,text) {
     let ret;
@@ -259,13 +338,10 @@ async function makeitem(w,h,x,y,fname,text) {
     let need_video_load = false;
     let vidpath = '';
 
-    let makeitem_stored = undefined;
+    let makeitem_stored = makeitem_Store[fname];
 
-    if(makeitem_Store.length > 0)
-        makeitem_stored = makeitem_Store.filter(x => x.fname == fname);
-
-    if(makeitem_stored == undefined || makeitem_stored == '') {
-
+    if(!makeitem_stored)
+    {
         let belowdirseekpath = `${parampath}/${fname}`;
         try {
             const jsondata = await dirseek(belowdirseekpath);
@@ -322,29 +398,6 @@ async function makeitem(w,h,x,y,fname,text) {
                         console.log(`video loading - ${name}`);
                     }
 					
-					
-					
-					
-					// let vidpath__;
-					
-					// for (let i = 0; i <= 4; i++)
-					// {
-						// const from = `drive_${i}`;
-						// const to = `drv${i}`;
-						// if (vidpath.includes(from))
-						// {
-							// vidpath__ = vidpath.replace(from, to);
-							// break; // 매칭된 경우 더 이상 검사할 필요 없음
-						// }
-					// }
-					
-					// console.log(`vidpath__ - ${vidpath__}`);
-					
-					// item_img = true;
-					// imgpath = `http://192.168.0.101:3000/api/thumbnail?path=${vidpath__}&time=60`
-					
-					
-
                 }
             }
         }
@@ -352,7 +405,7 @@ async function makeitem(w,h,x,y,fname,text) {
             console.log(ex);
         }
         
-        makeitem_Store.push({
+        makeitem_Store[fname] = {  // ✅ push 제거, 객체 할당
             fname: fname,
             item_enterable: item_enterable,
             item_img: item_img,
@@ -360,15 +413,15 @@ async function makeitem(w,h,x,y,fname,text) {
             item_vid: item_vid,
             need_video_load: need_video_load,
             vidpath: vidpath
-        });
+        };
     }
     else {
-        item_enterable = makeitem_stored[0].item_enterable;
-        item_img = makeitem_stored[0].item_img;
-        imgpath = makeitem_stored[0].imgpath;
-        item_vid = makeitem_stored[0].item_vid;
-        vidpath = makeitem_stored[0].vidpath;
-        need_video_load = makeitem_stored[0].need_video_load;
+        item_enterable = makeitem_Store[fname].item_enterable;
+        item_img = makeitem_Store[fname].item_img;
+        imgpath = makeitem_Store[fname].imgpath;
+        item_vid = makeitem_Store[fname].item_vid;
+        vidpath = makeitem_Store[fname].vidpath;
+        need_video_load = makeitem_Store[fname].need_video_load;
     }
 
     let linkelemnts;
@@ -377,8 +430,25 @@ async function makeitem(w,h,x,y,fname,text) {
     if(item_vid)
     {
         item_enterable = true;
-        linkelemnts = `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
-        // console.log(linkelemnts);
+
+        if(fname.substr(0, 3).toLowerCase() == 'tmw')
+        // if(false)
+        {
+            linkelemnts = `
+            <div class="badge-container">
+                <div class="badge">
+                    VR180PLAY
+                    <a href="${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+                </div>
+            </div>
+            `;
+        }
+        else
+        {
+            linkelemnts = ``;
+        }
+
+        linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
     }
     else
     {
@@ -419,7 +489,6 @@ async function makeitem(w,h,x,y,fname,text) {
         `;
     
         linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
-
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
@@ -520,6 +589,7 @@ async function startup() {
     visual_pictures_row = Math.floor(window.innerWidth / 400);
 
     dirlist = [];
+    makeitem_Store = {};
 
     const jsondata = await dirseek(parampath);
     if(jsondata["ret"])

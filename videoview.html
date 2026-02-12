@@ -276,6 +276,8 @@
             let muteState = false;
             let mutevolumestore = 0.00;
 
+            let shuffleidx=0;
+
             function onKeydown(param)
             {
                 console.log(param.key);
@@ -334,12 +336,20 @@
                         {
                             if(dirlist.length > 1)
                             {
-                                let randomitem;
-                                do
+                                // let randomitem;
+                                // do
+                                // {
+                                //     randomitem = dirlist[Math.floor(Math.random()*dirlist.length)];
+                                // } while(randomitem['d'] == currentfilename);
+                                // currentfilename = randomitem['d'];
+
+                                if(shuffleidx == 0)
                                 {
-                                    randomitem = dirlist[Math.floor(Math.random()*dirlist.length)];
-                                } while(randomitem['d'] == currentfilename);
-                                currentfilename = randomitem['d'];
+                                    dirlist.sort(() => Math.random() - 0.5);
+                                }
+                                currentfilename = dirlist[shuffleidx]['d'];
+                                shuffleidx++;
+                                if(shuffleidx >= dirlist.length) shuffleidx = 0;
 
                                 // console.log(`randomitem - ${currentfilename}`);
 
@@ -650,7 +660,9 @@
                     case 0: // left
                         {
                             leftmousedowned = false;                        
-                            if(!pastpausedstate) player.play();
+                            if(!pastpausedstate) {
+                                player.play();
+                            }
                             clearInterval(seeking_labelsetting_handler);
                         }
                         break;
@@ -678,6 +690,10 @@
 
             });
 
+
+            let seeking_progress_current_percent = 0;
+            let seeking_progress_target_percent = 0;
+
             let seeking_labelsetting_handler = null;
             function seeking_labelsetting_handler_elapsed() {
                 let msg;
@@ -687,20 +703,19 @@
                     const progress = ((startvideoposition+positionscrollcurr) / player.duration * 100).toFixed(2);
                     const sec = parseInt(positionscrollcurr);
                     msg = `seeking to ${progress}% (${sec}s)`;
+                    setLabelText(msg);
                 }
-                else
-                {
-                    const progress = (player.currentTime / player.duration * 100).toFixed(2);
-                    const sec = parseInt(player.currentTime - startvideoposition);
-                    msg = `moved - ${progress}% (${sec}s)`;
-                }
-
-                setLabelText(msg);
             }
             
             let player_seeking_available = false;
             player.addEventListener('seeked', () => {
                 if(leftmousedowned) {
+
+                    const progress = (player.currentTime / player.duration * 100).toFixed(2);
+                    const sec = parseInt(player.currentTime - startvideoposition);
+                    msg = `moved - ${progress}% (${sec}s)`;
+                    setLabelText(msg);
+
                     player_seeking();
                     player_seeking_available = true;
                 }
@@ -719,7 +734,7 @@
             document.addEventListener("mousemove", (param) => {
 
                 if(leftmousedowned) {
-                    console.log("mousemove !");
+                    // console.log("mousemove !");
                     leftcancelnextclick = true;
 
                     let diff = param.x - leftmousedownpos;
@@ -738,6 +753,7 @@
                         leftmouse_movestarted = false;
 
                         pastpausedstate = player.paused;
+                        console.log(`pause !`);
                         player.pause();
                         positionscrollstart = positionscroll;
                         startvideoposition = player.currentTime;
@@ -746,6 +762,8 @@
                     }
 
                     positionscrollcurr = positionscroll - positionscrollstart;
+                    positionscrollcurr /= 10;
+                    positionscrollcurr *= 10;
 
                     if(player_seeking_available) {
                         player_seeking();
@@ -836,7 +854,7 @@
                     }
 
 
-                    console.log(dirlist);
+                    // console.log(dirlist);
 
                     player = document.getElementById("player");
                     player.src = parampath;

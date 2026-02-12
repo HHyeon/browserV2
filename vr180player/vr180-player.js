@@ -717,7 +717,7 @@ function init() {
 		}
 		
 		// Initialize 2D control panel
-		// init2DControlPanel();
+		init2DControlPanel();
 
 		handleEnterVRButtonClick();
 	} catch (e) {
@@ -952,15 +952,18 @@ function updateCameraRotation() {
 
 // Mouse Controls
 function onMouseDown(event) {
-	if (!is2DMode) return;
-	isDragging = true;
-	lastMouseX = event.clientX;
-	lastMouseY = event.clientY;
-	cameraVelocity.yaw = 0;
-	cameraVelocity.pitch = 0;
-	
-	// Hide controls when dragging starts
-	hide2DControlPanel();
+	if(event.button == 0)
+	{
+		if (!is2DMode) return;
+		isDragging = true;
+		lastMouseX = event.clientX;
+		lastMouseY = event.clientY;
+		cameraVelocity.yaw = 0;
+		cameraVelocity.pitch = 0;
+		
+		// Hide controls when dragging starts
+		hide2DControlPanel();
+	}
 }
 
 function onMouseWheel(event) {

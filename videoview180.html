@@ -575,101 +575,101 @@
             }
 
             // let pastpausedstate = false;
-            // let leftmouse_movestarted = false;
-            // let leftmousedowned = false;
-            // let leftmousedownpos = 0;
-            // let leftcancelnextclick = false;
+            let leftmouse_movestarted = false;
+            let leftmousedowned = false;
+            let leftmousedownpos = 0;
+            let leftcancelnextclick = false;
 
-            // let rightmouse_movestarted = false;
-            // let rightmousedowned = false;
-            // let rightmousedownpos = 0;
-            // let rightcancelnextclick = false;
+            let rightmouse_movestarted = false;
+            let rightmousedowned = false;
+            let rightmousedownpos = 0;
+            let rightcancelnextclick = false;
 
             // let videoseekingproceeding = false;
             // let positionscrollstart;
             // let positionscrollcurr;
             // let startvideoposition;
 
-            // let intervallyspeedinfodisplay = undefined;
+            let intervallyspeedinfodisplay = undefined;
             
-            // document.addEventListener("click", (param) => {
+            document.addEventListener("click", (param) => {
 
-            //     switch(param.button) {
-            //         case 0:
-            //             console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
+                switch(param.button) {
+                    // case 0:
+                    //     console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
 
-            //             if(leftcancelnextclick) leftcancelnextclick = false;
-            //             else pauseplay();
-            //             break;
-            //         case 1:
+                    //     if(leftcancelnextclick) leftcancelnextclick = false;
+                    //     else pauseplay();
+                    //     break;
+                    // case 1:
 
-            //             break;
-            //         case 2:
-            //             if(rightcancelnextclick) rightcancelnextclick = false;
-            //             else {
-            //                 console.log("right click");
-            //             }
-            //             break;
-            //     }
-            // });
+                    //     break;
+                    case 2:
+                        if(rightcancelnextclick) rightcancelnextclick = false;
+                        else {
+                            console.log("right click");
+                        }
+                        break;
+                }
+            });
 
-            // document.addEventListener("mousedown", (param) => {
+            document.addEventListener("mousedown", (param) => {
 
-            //     switch(param.button) {
-            //         case 0: // left
-            //             leftmousedowned = true;
-            //             leftmouse_movestarted = true;
-            //             leftmousedownpos = param.x;
-            //             seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
-            //             break;
+                switch(param.button) {
+                    // case 0: // left
+                    //     leftmousedowned = true;
+                    //     leftmouse_movestarted = true;
+                    //     leftmousedownpos = param.x;
+                    //     seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
+                    //     break;
                     
-            //         case 1: // middle
-            //             player.playbackRate = 1.0;
-            //             setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
-            //             break;
+                    case 1: // middle
+                        player.playbackRate = 1.0;
+                        setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
+                        break;
                     
-            //         case 2: // right
-            //             rightmousedowned = true;
-            //             rightmouse_movestarted = true;
-            //             rightmousedownpos = param.x
-            //             break;
-            //     }
+                    case 2: // right
+                        rightmousedowned = true;
+                        rightmouse_movestarted = true;
+                        rightmousedownpos = param.x
+                        break;
+                }
                 
-            // });
+            });
             
-            // document.addEventListener("mouseup", (param) => {
+            document.addEventListener("mouseup", (param) => {
                 
-            //     switch(param.button) {
-            //         case 0: // left
-            //             {
-            //                 leftmousedowned = false;                        
-            //                 if(!pastpausedstate) player.play();
-            //                 clearInterval(seeking_labelsetting_handler);
-            //             }
-            //             break;
+                switch(param.button) {
+                    // case 0: // left
+                    //     {
+                    //         leftmousedowned = false;                        
+                    //         if(!pastpausedstate) player.play();
+                    //         clearInterval(seeking_labelsetting_handler);
+                    //     }
+                    //     break;
                     
-            //         case 1: // middle
+                    // case 1: // middle
 
-            //             break;
+                    //     break;
                     
-            //         case 2: // right
-            //             {
-            //                 rightmousedowned = false;
-            //                 player.playbackRate = speed_currentpushstarts - speed_currentpush;
+                    case 2: // right
+                        {
+                            rightmousedowned = false;
+                            player.playbackRate = speed_currentpushstarts - speed_currentpush;
 
-            //                 if(intervallyspeedinfodisplay != undefined)
-            //                 {
-            //                     clearInterval(intervallyspeedinfodisplay);
-            //                     intervallyspeedinfodisplay = undefined;
-            //                     console.log("intervallyspeedinfodisplay terminated");
+                            if(intervallyspeedinfodisplay != undefined)
+                            {
+                                clearInterval(intervallyspeedinfodisplay);
+                                intervallyspeedinfodisplay = undefined;
+                                console.log("intervallyspeedinfodisplay terminated");
                                 
-            //                     setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
-            //                 }
-            //             }
-            //             break;
-            //     }
+                                setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
+                            }
+                        }
+                        break;
+                }
 
-            // });
+            });
 
             // let seeking_labelsetting_handler = null;
             // function seeking_labelsetting_handler_elapsed() {
@@ -704,81 +704,82 @@
             // }
 
             // const min_seeking_unit = 0.1;
-            // const scroll_range = 1000;
+            const scroll_range = 1000;
 
             // let speed_currentpushstarts=-1;
             // let speed_currentpush;
 
-            // document.addEventListener("mousemove", (param) => {
+            document.addEventListener("mousemove", (param) => {
 
-            //     if(leftmousedowned) {
-            //         console.log("mousemove !");
-            //         leftcancelnextclick = true;
+                // if(leftmousedowned) {
+                //     console.log("mousemove !");
+                //     leftcancelnextclick = true;
 
-            //         let diff = param.x - leftmousedownpos;
-            //         if(diff > scroll_range) diff = scroll_range;
-            //         diff = parseInt(diff);
-            //         const maxpushduration = 180.0 // second
-            //         let positionscroll = parseInt(diff / scroll_range * maxpushduration);
+                //     let diff = param.x - leftmousedownpos;
+                //     if(diff > scroll_range) diff = scroll_range;
+                //     diff = parseInt(diff);
+                //     const maxpushduration = 180.0 // second
+                //     let positionscroll = parseInt(diff / scroll_range * maxpushduration);
 
-            //         positionscroll /= min_seeking_unit;
-            //         positionscroll = parseInt(positionscroll);
-            //         positionscroll *= min_seeking_unit;
-            //         positionscroll = parseInt(positionscroll);
+                //     positionscroll /= min_seeking_unit;
+                //     positionscroll = parseInt(positionscroll);
+                //     positionscroll *= min_seeking_unit;
+                //     positionscroll = parseInt(positionscroll);
 
-            //         if(leftmouse_movestarted)
-            //         {
-            //             leftmouse_movestarted = false;
+                //     if(leftmouse_movestarted)
+                //     {
+                //         leftmouse_movestarted = false;
 
-            //             pastpausedstate = player.paused;
-            //             player.pause();
-            //             positionscrollstart = positionscroll;
-            //             startvideoposition = player.currentTime;
+                //         pastpausedstate = player.paused;
+                //         player.pause();
+                //         positionscrollstart = positionscroll;
+                //         startvideoposition = player.currentTime;
 
-            //             player_seeking_available = true;
-            //         }
+                //         player_seeking_available = true;
+                //     }
 
-            //         positionscrollcurr = positionscroll - positionscrollstart;
+                //     positionscrollcurr = positionscroll - positionscrollstart;
 
-            //         if(player_seeking_available) {
-            //             player_seeking();
-            //             player_seeking_available = false;
-            //         }
+                //     if(player_seeking_available) {
+                //         player_seeking();
+                //         player_seeking_available = false;
+                //     }
 
-            //     }
-            //     else if(rightmousedowned) {
-            //         rightcancelnextclick = true;
+                // }
+                // else 
+                if(rightmousedowned) {
+                    rightcancelnextclick = true;
 
-            //         let diff = rightmousedownpos - param.x;
-            //         if(diff > scroll_range) diff = scroll_range;
-            //         diff = parseInt(diff);
-            //         const maxpushamount = 1.0;
+                    let diff = rightmousedownpos - param.x;
+                    if(diff > scroll_range) diff = scroll_range;
+                    diff = parseInt(diff);
+                    const maxpushamount = 1.0;
                     
-            //         if(rightmouse_movestarted)
-            //         {
-            //             rightmouse_movestarted = false;
-            //             speed_currentpushstarts = player.playbackRate;
+                    if(rightmouse_movestarted)
+                    {
+                        rightmouse_movestarted = false;
+                        speed_currentpushstarts = player.playbackRate;
                         
-            //             if(intervallyspeedinfodisplay != undefined)
-            //             {
-            //                 clearInterval(intervallyspeedinfodisplay);
-            //                 intervallyspeedinfodisplay = undefined;
-            //             }
+                        if(intervallyspeedinfodisplay != undefined)
+                        {
+                            clearInterval(intervallyspeedinfodisplay);
+                            intervallyspeedinfodisplay = undefined;
+                        }
 
-            //             console.log("intervallyspeedinfodisplay started");
-            //             intervallyspeedinfodisplay = setInterval(() => {
-            //                 player.playbackRate = speed_currentpushstarts - speed_currentpush;
-            //                 setLabelText(`playbackrate - ${(speed_currentpushstarts - speed_currentpush).toFixed(2)}`);
-            //             }, 200);
-            //         }
+                        console.log("intervallyspeedinfodisplay started");
+                        intervallyspeedinfodisplay = setInterval(() => {
+                            player.playbackRate = speed_currentpushstarts - speed_currentpush;
+                            setLabelText(`playbackrate - ${(speed_currentpushstarts - speed_currentpush).toFixed(2)}`);
+                        }, 200);
+                    }
 
-            //         speed_currentpush = diff / scroll_range * maxpushamount;
+                    speed_currentpush = diff / scroll_range * maxpushamount;
 
-            //         // console.log(`push - ${speed_currentpushstarts - speed_currentpush}`);
+                    // console.log(`push - ${speed_currentpushstarts - speed_currentpush}`);
 
-            //     }
+                }
 
-            // });
+            });
 
 
             async function startup() {
