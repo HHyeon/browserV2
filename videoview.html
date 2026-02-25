@@ -853,8 +853,10 @@
                         dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
                     }
 
+                        
+                    dirlist = dirlist.filter(e => !e["d"].toLowerCase().includes('tmw'));
 
-                    // console.log(dirlist);
+                    console.log(dirlist);
 
                     player = document.getElementById("player");
                     player.src = parampath;
@@ -862,7 +864,7 @@
                         if(setplaytime)
                         {
                             setplaytime = false;
-                            player.currentTime = (player.duration / 10) * (1+Math.random()*3.0);
+                            player.currentTime = (player.duration / 10) * (2+Math.random()*3.0);
                             console.log(player.currentTime);
                         }
                     });

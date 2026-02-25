@@ -32,8 +32,11 @@ let typing_panel = document.getElementById('typing_panel');
 
 let input_search = document.querySelector('.input_search');
 
-let visual_pictures_row = 3;
-let visual_pictures_col = 4;
+
+const item_width_define = 400;
+
+let visual_pictures_row = 0;
+let visual_pictures_col = 0;
 
 
 async function dirseek(param) {
@@ -65,6 +68,7 @@ function indexedDB_init() {
     request.onsuccess = (e) => {
         DBSession = request.result;
         
+        console.log('startup proceed after indexedDB init');
         startup();
     }
     
@@ -228,7 +232,7 @@ async function refreshinginfinitylist()
 
 
     
-    // 🔑 새 코드: 비디오를 큐에 추가하고 순차 처리 시작
+    // // 🔑 새 코드: 비디오를 큐에 추가하고 순차 처리 시작
     document.querySelectorAll('video:not([data-video-queued])').forEach(videoElement => {
         const videoName = videoElement.src.substring(videoElement.src.lastIndexOf('/') + 1);
         
@@ -379,11 +383,9 @@ async function makeitem(w,h,x,y,fname,text) {
                 }
                 else if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') {
                     item_vid = true;
+
                     vidpath = parampath + "/" + encodeURI(fname);
                     let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
-
-
-
                     const get_result = await indexedDB_get(name);
                     if(get_result != undefined) // valid
                     {
@@ -398,6 +400,9 @@ async function makeitem(w,h,x,y,fname,text) {
                         console.log(`video loading - ${name}`);
                     }
 					
+                    // vidpath = parampath + "/" + encodeURI(fname);
+                    // need_video_load = true;
+
                 }
             }
         }
@@ -431,24 +436,33 @@ async function makeitem(w,h,x,y,fname,text) {
     {
         item_enterable = true;
 
+        linkelemnts = ``;
+
+        // if(fname.substr(0, 3).toLowerCase() == 'tmw')
+        // // if(false)
+        // {
+        //     linkelemnts = `
+        //     <div class="badge-container">
+        //         <div class="badge">
+        //             VR180PLAY
+        //             <a href="${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+        //         </div>
+        //     </div>
+        //     `;
+        // }
+        // else
+        // {
+        //     linkelemnts = ``;
+        // }
+
         if(fname.substr(0, 3).toLowerCase() == 'tmw')
-        // if(false)
         {
-            linkelemnts = `
-            <div class="badge-container">
-                <div class="badge">
-                    VR180PLAY
-                    <a href="${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
-                </div>
-            </div>
-            `;
+            linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
         }
         else
         {
-            linkelemnts = ``;
+            linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
         }
-
-        linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
     }
     else
     {
@@ -575,7 +589,16 @@ explorer_open_btn.addEventListener('click', () => {
     }
 });
 
+let startupprocessing = false;
+
 async function startup() {
+    if(startupprocessing)
+    {
+        console.log('startup already processing, skip');
+        return;
+    }
+
+    startupprocessing = true;
 
     let ordertype = localStorage.getItem('listordertype');
 
@@ -586,7 +609,7 @@ async function startup() {
 
     console.log(`ordertype - ${ordertype}`);
 
-    visual_pictures_row = Math.floor(window.innerWidth / 400);
+    visual_pictures_row = Math.floor(window.innerWidth / item_width_define);
 
     dirlist = [];
     makeitem_Store = {};
@@ -629,6 +652,7 @@ async function startup() {
 
         if(paramfind != null)
         {
+            console.log(`searching - ${paramfind}`);
             dirlist = dirlist.filter(x=> x.fname.toUpperCase().includes(paramfind.toUpperCase()));
         }
 
@@ -698,6 +722,8 @@ async function startup() {
                 TopScrollView.style.height = viewhei;
             }
 
+            // console.log(`dirlist - ${JSON.stringify(dirlist)}`);
+
 			refreshinginfinitylist();
 			
         }
@@ -713,6 +739,8 @@ async function startup() {
         MainTitle.style.display = 'block';
         MainTitle.innerText = `${parampath} dirseek Error`;
     }
+
+    startupprocessing = false;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -725,6 +753,8 @@ function setordertype(type)
     if(type >= 1 && type <= 4)
     {
         localStorage.setItem('listordertype', type); // time
+
+        console.log(`startup with setordertype - ${type}`);
         startup();
     }
 }
@@ -876,6 +906,12 @@ document.addEventListener('keydown', (e) => {
 
 });
 
+// only rerun startup when width changes, n ot height
+let lastWindowWidth = window.innerWidth;
 window.addEventListener("resize", () => {
-    startup();
+    const w = window.innerWidth;
+    if (w !== lastWindowWidth) {
+        lastWindowWidth = w;
+        startup();
+    }
 });

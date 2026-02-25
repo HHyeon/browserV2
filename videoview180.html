@@ -47,7 +47,6 @@
         <h1 id="label2"></h1>
     
         <script>
-    
 
             player = document.getElementById("vr180");
             
@@ -343,6 +342,7 @@
 
                     //             setLabelText(`${currentfilename}`);
                                 
+                    //             init();
                     //         }
                     //     }
                     // break;
@@ -829,6 +829,7 @@
                         dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
                     }
 
+                    dirlist = dirlist.filter(e => e["d"].toLowerCase().includes('tmw'));
 
                     console.log(dirlist);
 

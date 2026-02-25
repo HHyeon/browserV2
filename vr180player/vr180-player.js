@@ -13,7 +13,7 @@ let controlPanel, videoTitle, currentTimeDisplay, totalTimeDisplay, progressBar,
 let fullscreenBtn, backBtn, play2Btn, forwardBtn, muteBtn;
 let controlPanelTimeout;
 let isControlPanelVisible = false;
-const CONTROL_PANEL_HIDE_DELAY = 3000; // 3 seconds
+const CONTROL_PANEL_HIDE_DELAY = 1000; // 3 seconds
 
 let isXrLoopActive = false;
 let is2DMode = false;
