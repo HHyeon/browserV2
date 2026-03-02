@@ -238,6 +238,12 @@ function eliminate_out_of_range_items(visibleItemStart, visibleItemEnd) {
         const idx = Number(idxStr);
         if (isNaN(idx)) return;
         if (idx < visibleItemStart || idx >= visibleItemEnd) {
+            // 비디오 요소 gracefully 정지
+            const videos = el.querySelectorAll('video');
+            videos.forEach(video => {
+                video.pause();
+                video.currentTime = 0;
+            });
             el.remove();
             console.log(`[Remove] Item ${idx} (out of range)`);
         }
@@ -632,7 +638,7 @@ async function makeitem(w,h,x,y,fname,text) {
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
-    let videlements = `<video loop src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
+    let videlements = `<video loop autoplay muted src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
     
     ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; ">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">
@@ -837,7 +843,7 @@ async function startup() {
             // item_w = 400;
             item_h = item_w;
 
-            visual_pictures_col = Math.floor(window.innerHeight / item_h)+1;
+            visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
 
             // console.log(`visual_pictures_row ${visual_pictures_row}`);
             // console.log(`visual_pictures_col ${visual_pictures_col}`);
@@ -986,6 +992,11 @@ document.addEventListener('keydown', (e) => {
     else if(e.key == '\\')
     {
         makeitem_Store = [];
+        // 모든 비디오 멈추고 초기화
+        document.querySelectorAll('video').forEach(video => {
+            video.pause();
+            video.currentTime = 0;
+        });
         refreshinginfinitylist();
     }
     else if(e.key == 'Backspace')
