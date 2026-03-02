@@ -117,12 +117,236 @@ async function indexedDB_get(filename) {
     
 }
 
+let lastVisibleStart = 0;  // 이전 렌더링의 시작 인덱스
+let lastVisibleEnd = 0;    // 이전 렌더링의 끝 인덱스
+
+// setInterval(() => {
+//     const visibleStart = scrolleditemidx;
+//     const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
+//     const visibleItemStart = visibleStart * visual_pictures_row;
+//     const visibleItemEnd = visibleEnd * visual_pictures_row;
+
+//     // 제거: 현재 화면 범위(visibleItemStart..visibleItemEnd) 밖의 모든 항목 제거
+//     document.querySelectorAll('[data-item-index]').forEach(el => {
+//         const idxStr = el.getAttribute('data-item-index');
+//         const idx = Number(idxStr);
+//         if (isNaN(idx)) return;
+//         if (idx < visibleItemStart || idx >= visibleItemEnd) {
+//             el.remove();
+//             console.log(`[Remove] Item ${idx} (out of range)`);
+//         }
+//     });
+
+// }, 1000);
+
+
+function eliminate_out_of_range_items(visibleItemStart, visibleItemEnd) {
+    // 제거: 현재 화면 범위(visibleItemStart..visibleItemEnd) 밖의 모든 항목 제거
+    document.querySelectorAll('[data-item-index]').forEach(el => {
+        const idxStr = el.getAttribute('data-item-index');
+        const idx = Number(idxStr);
+        if (isNaN(idx)) return;
+        if (idx < visibleItemStart || idx >= visibleItemEnd) {
+            // 비디오 요소 gracefully 정지
+            const videos = el.querySelectorAll('video');
+            videos.forEach(video => {
+                video.pause();
+                video.removeAttribute('src');
+                video.load(); // 네트워크 해제
+            });
+            el.remove();
+            console.log(`[Remove] Item ${idx} (out of range)`);
+        }
+    });
+}
+
+
+async function refreshinginfinitylist()
+{
+    // 계산: 현재 화면에 보여야 할 항목 범위
+    const visibleStart = scrolleditemidx;
+    const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
+    const visibleItemStart = visibleStart * visual_pictures_row;
+    const visibleItemEnd = visibleEnd * visual_pictures_row;
+
+    console.log(`[Refresh] Current: ${visibleItemStart}-${visibleItemEnd}, Last: ${lastVisibleStart}-${lastVisibleEnd}`);
+
+    // 첫 렌더링인 경우: 전체 DOM 초기화
+    if(lastVisibleStart === 0 && lastVisibleEnd === 0) {
+        TopScrollView.innerHTML = '';
+        
+        for(let i=0; i<visual_pictures_row*visual_pictures_col; i++) {
+            const idx = i + (scrolleditemidx * visual_pictures_row);
+            if(idx >= dirlist.length) break;
+            
+            const dirlist_item = dirlist[idx];
+            const pos_x = (item_w + 1) * (i % visual_pictures_row);
+            const pos_y = (item_h + 1) * (Math.floor(i / visual_pictures_row) + scrolleditemidx);
+            
+            const html = await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
+            // skip if already present (prevents duplicate overlap)
+            if (!TopScrollView.querySelector(`[data-item-index="${idx}"]`)) {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = html;
+                const itemElem = wrapper.firstElementChild;
+                if (itemElem) {
+                    itemElem.setAttribute('data-item-index', idx);
+                    TopScrollView.appendChild(itemElem);
+                }
+            } else {
+                console.log(`[Skip] Item ${idx} already exists (initial render)`);
+            }
+        }
+        
+        lastVisibleStart = visibleItemStart;
+        lastVisibleEnd = Math.min(visibleItemEnd, dirlist.length);
+    }
+
+    // 범위 변경이 없으면 스킵
+    if(visibleItemStart === lastVisibleStart && visibleItemEnd === lastVisibleEnd) {
+        console.log('[Refresh] No range change, skip');
+    }
+    else
+    {
+        console.log(`[Refresh] Range changed: ${visibleItemStart}-${visibleItemEnd}`);
+        console.log(`[Refresh] Last range: ${lastVisibleStart}-${lastVisibleEnd}`);
+
+
+
+        // 추가: 새 범위에는 있지만 이전 범위에는 없는 항목
+        const itemsToAdd = [];
+        
+        if(visibleItemStart < lastVisibleStart) {
+            // 위로 스크롤: 위에 추가할 항목들
+
+            if(lastVisibleStart - visibleItemStart > visual_pictures_row * visual_pictures_col) {
+                // 너무 많은 항목을 추가하는 경우, 최대치를 제한
+                const maxItems = visual_pictures_row * visual_pictures_col;
+                for(let idx = visibleItemStart; idx < visibleItemStart + maxItems; idx++) {
+                    itemsToAdd.push(idx);
+                }
+            } else {
+                for(let idx = visibleItemStart; idx < lastVisibleStart; idx++) {
+                    itemsToAdd.push(idx);
+                }
+            }
+        }
+        
+        if(visibleItemEnd > lastVisibleEnd) {
+            // 아래로 스크롤: 아래에 추가할 항목들
+            if(visibleItemEnd - lastVisibleEnd > visual_pictures_row * visual_pictures_col) {
+                // 너무 많은 항목을 추가하는 경우, 최대치를 제한
+                const maxItems = visual_pictures_row * visual_pictures_col;
+                for(let idx = visibleItemStart; idx < visibleItemStart + maxItems; idx++) {
+                    itemsToAdd.push(idx);
+                }
+            } else {
+                for(let idx = lastVisibleEnd; idx < visibleItemEnd; idx++) {
+
+                    itemsToAdd.push(idx);
+                }
+            }
+        }
+
+        console.log(`itemsToAdd - ${itemsToAdd}`);
+
+        // 새로운 항목들을 DOM에 추가
+        for(let idx of itemsToAdd) {
+            if(idx >= 0 && idx < dirlist.length) {
+                const dirlist_item = dirlist[idx];
+                const row = Math.floor(idx / visual_pictures_row);
+                const col = idx % visual_pictures_row;
+                const pos_x = (item_w + 1) * col;
+                const pos_y = (item_h + 1) * row;
+                
+                // skip if already present (prevents duplicate overlap)
+                if (!TopScrollView.querySelector(`[data-item-index="${idx}"]`)) {
+                    const html = await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = html;
+                    const itemElem = wrapper.firstElementChild;
+                    if (itemElem) {
+                        itemElem.setAttribute('data-item-index', idx);
+                        TopScrollView.appendChild(itemElem);
+                    }
+                    console.log(`[Add] Item ${idx}`);
+                } else {
+                    console.log(`[Skip] Item ${idx} already exists`);
+                }
+            }
+        }
+
+        // 렌더링 범위 업데이트
+        lastVisibleStart = visibleItemStart;
+        lastVisibleEnd = Math.min(visibleItemEnd, dirlist.length);
+    }
+
+    // console.log(`videos : ${document.querySelectorAll('video')}`);
+
+    // if(true)
+    // {
+    //     document.querySelectorAll('video').forEach(video => {
+
+    //         function setTime() {
+    //             if (!Number.isFinite(video.duration)) {
+    //                 console.log('duration not ready:', video.duration);
+    //                 return;
+    //             }
+
+    //             if ('fastSeek' in video) {
+    //                 video.fastSeek(video.duration / 3);
+    //             } else {
+    //                 video.currentTime = video.duration / 3;
+    //             }
+
+    //             video.addEventListener('seeked', () => {
+    //                 const name = video.getAttribute('src');
+    //                 // console.log(`video seeked - ${name} at ${video.currentTime}s`);
+    //                 // video.speed
+    //                 // video.playbackRate = 0.1;
+    //                 // video.play();
+    //             }, { once: true });
+    //         }
+
+    //         if(video.readyState >= 1 && Number.isFinite(video.duration)) {
+    //             setTime();
+    //         }
+    //         else {
+    //             console.log(`video metadata not ready, waiting - ${video.getAttribute('src')}`);
+    //             video.addEventListener('loadedmetadata', setTime, { once: true });
+    //         }
+    //     });
+    // }
+
+    // 🔑 새 코드: 비디오를 큐에 추가하고 순차 처리 시작
+    document.querySelectorAll('video:not([data-video-queued])').forEach(videoElement => {
+        const videoName = videoElement.src.substring(videoElement.src.lastIndexOf('/') + 1);
+        
+        // 이미 처리됨 표시
+        videoElement.dataset.videoQueued = 'true';
+
+        // 큐에 추가
+        videoLoadQueue.push({
+            name: decodeURI(videoName),
+            element: videoElement
+        });
+
+        console.log(`[Queue] Added ${videoName}`);
+    });
+
+    // 큐 처리 시작
+    processVideoLoadQueue();
+
+
+
+}
+
+
 
 // 전역 변수 추가 (file 상단)
 let videoLoadQueue = [];        // 로드 대기 중인 비디오 정보
 let activeVideoLoads = 0;       // 현재 진행 중인 로드 개수
 const MAX_CONCURRENT_LOADS = 2; // 동시 로드 최대 개수
-
 
 // makeitem() 호출 후 추가할 함수
 async function processVideoLoadQueue() {
@@ -208,178 +432,7 @@ async function processVideoLoadQueue() {
     }
 }
 
-let lastVisibleStart = 0;  // 이전 렌더링의 시작 인덱스
-let lastVisibleEnd = 0;    // 이전 렌더링의 끝 인덱스
 
-// setInterval(() => {
-//     const visibleStart = scrolleditemidx;
-//     const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
-//     const visibleItemStart = visibleStart * visual_pictures_row;
-//     const visibleItemEnd = visibleEnd * visual_pictures_row;
-
-//     // 제거: 현재 화면 범위(visibleItemStart..visibleItemEnd) 밖의 모든 항목 제거
-//     document.querySelectorAll('[data-item-index]').forEach(el => {
-//         const idxStr = el.getAttribute('data-item-index');
-//         const idx = Number(idxStr);
-//         if (isNaN(idx)) return;
-//         if (idx < visibleItemStart || idx >= visibleItemEnd) {
-//             el.remove();
-//             console.log(`[Remove] Item ${idx} (out of range)`);
-//         }
-//     });
-
-// }, 1000);
-
-
-function eliminate_out_of_range_items(visibleItemStart, visibleItemEnd) {
-    // 제거: 현재 화면 범위(visibleItemStart..visibleItemEnd) 밖의 모든 항목 제거
-    document.querySelectorAll('[data-item-index]').forEach(el => {
-        const idxStr = el.getAttribute('data-item-index');
-        const idx = Number(idxStr);
-        if (isNaN(idx)) return;
-        if (idx < visibleItemStart || idx >= visibleItemEnd) {
-            // 비디오 요소 gracefully 정지
-            const videos = el.querySelectorAll('video');
-            videos.forEach(video => {
-                video.pause();
-                video.currentTime = 0;
-            });
-            el.remove();
-            console.log(`[Remove] Item ${idx} (out of range)`);
-        }
-    });
-}
-
-
-async function refreshinginfinitylist()
-{
-    // 계산: 현재 화면에 보여야 할 항목 범위
-    const visibleStart = scrolleditemidx;
-    const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
-    const visibleItemStart = visibleStart * visual_pictures_row;
-    const visibleItemEnd = visibleEnd * visual_pictures_row;
-
-    console.log(`[Refresh] Current: ${visibleItemStart}-${visibleItemEnd}, Last: ${lastVisibleStart}-${lastVisibleEnd}`);
-
-    // 첫 렌더링인 경우: 전체 DOM 초기화
-    if(lastVisibleStart === 0 && lastVisibleEnd === 0) {
-        TopScrollView.innerHTML = '';
-        
-        for(let i=0; i<visual_pictures_row*visual_pictures_col; i++) {
-            const idx = i + (scrolleditemidx * visual_pictures_row);
-            if(idx >= dirlist.length) break;
-            
-            const dirlist_item = dirlist[idx];
-            const pos_x = (item_w + 1) * (i % visual_pictures_row);
-            const pos_y = (item_h + 1) * (Math.floor(i / visual_pictures_row) + scrolleditemidx);
-            
-            const html = await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
-            // skip if already present (prevents duplicate overlap)
-            if (!TopScrollView.querySelector(`[data-item-index="${idx}"]`)) {
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = html;
-                const itemElem = wrapper.firstElementChild;
-                if (itemElem) {
-                    itemElem.setAttribute('data-item-index', idx);
-                    TopScrollView.appendChild(itemElem);
-                }
-            } else {
-                console.log(`[Skip] Item ${idx} already exists (initial render)`);
-            }
-        }
-        
-        lastVisibleStart = visibleItemStart;
-        lastVisibleEnd = Math.min(visibleItemEnd, dirlist.length);
-        return;
-    }
-
-    // 범위 변경이 없으면 스킵
-    if(visibleItemStart === lastVisibleStart && visibleItemEnd === lastVisibleEnd) {
-        return;
-    }
-
-    // 제거: 이전 범위에는 있었지만 새 범위 밖인 항목
-    if(visibleItemStart > lastVisibleStart) {
-        // 아래로 스크롤: 위 항목 제거
-        console.log(`remove idx - ${lastVisibleStart} to ${visibleItemStart}`);
-        for(let idx = lastVisibleStart; idx < visibleItemStart; idx++) {
-            const element = document.querySelector(`[data-item-index="${idx}"]`);
-            if(element) {
-                element.remove();
-                console.log(`[Remove] Item ${idx}`);
-            }
-            else
-            {
-                console.log(`[Remove] Item ${idx} not found in DOM`);
-            }
-        }
-    } else if(visibleItemStart < lastVisibleStart) {
-        // 위로 스크롤: 아래 항목 제거
-
-        console.log(`remove idx - ${visibleItemEnd} to ${lastVisibleEnd}`);
-        for(let idx = visibleItemEnd; idx < lastVisibleEnd; idx++) {
-            const element = document.querySelector(`[data-item-index="${idx}"]`);
-            if(element) {
-                element.remove();
-                console.log(`[Remove] Item ${idx}`);
-            }
-            else
-            {
-                console.log(`[Remove] Item ${idx} not found in DOM`);
-            }
-        }
-    }
-
-    // 추가: 새 범위에는 있지만 이전 범위에는 없는 항목
-    const itemsToAdd = [];
-    
-    if(visibleItemStart < lastVisibleStart) {
-        // 위로 스크롤: 위에 추가할 항목들
-        for(let idx = visibleItemStart; idx < lastVisibleStart; idx++) {
-            itemsToAdd.push(idx);
-        }
-    }
-    
-    if(visibleItemEnd > lastVisibleEnd) {
-        // 아래로 스크롤: 아래에 추가할 항목들
-        for(let idx = lastVisibleEnd; idx < visibleItemEnd; idx++) {
-            itemsToAdd.push(idx);
-        }
-    }
-
-    // 새로운 항목들을 DOM에 추가
-    for(let idx of itemsToAdd) {
-        if(idx >= 0 && idx < dirlist.length) {
-            const dirlist_item = dirlist[idx];
-            const row = Math.floor(idx / visual_pictures_row);
-            const col = idx % visual_pictures_row;
-            const pos_x = (item_w + 1) * col;
-            const pos_y = (item_h + 1) * row;
-            
-            // skip if already present (prevents duplicate overlap)
-            if (!TopScrollView.querySelector(`[data-item-index="${idx}"]`)) {
-                const html = await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text);
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = html;
-                const itemElem = wrapper.firstElementChild;
-                if (itemElem) {
-                    itemElem.setAttribute('data-item-index', idx);
-                    TopScrollView.appendChild(itemElem);
-                }
-                console.log(`[Add] Item ${idx}`);
-            } else {
-                console.log(`[Skip] Item ${idx} already exists`);
-            }
-        }
-    }
-
-    // 렌더링 범위 업데이트
-    lastVisibleStart = visibleItemStart;
-    lastVisibleEnd = Math.min(visibleItemEnd, dirlist.length);
-
-    eliminate_out_of_range_items(visibleItemStart, visibleItemEnd);
-
-}
 
 function video_to_image_base64(video) {
     const canvas = document.querySelector('canvas');
@@ -405,21 +458,29 @@ window.addEventListener("scroll", function(e) {
 	}
 
     scrolleditemidx = Math.floor(window.scrollY / item_h);
-    
+
+    if(scrolleditemidx != scrolleditemidx_store)
+    {
+        scrolleditemidx_store = scrolleditemidx;
+
+        const visibleStart = scrolleditemidx;
+        const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
+        const visibleItemStart = visibleStart * visual_pictures_row;
+        const visibleItemEnd = visibleEnd * visual_pictures_row;
+
+        eliminate_out_of_range_items(visibleItemStart, visibleItemEnd);
+    }
+
+    // console.log(`scrolleditemidx - ${scrolleditemidx}`);
+
     // 이전 debounce 타이머 취소
     if (scrollDebounceTimer) {
         clearTimeout(scrollDebounceTimer);
     }
-
     // 새로운 debounce 타이머 설정: 스크롤이 안정되면 refresh 호출
     scrollDebounceTimer = setTimeout(() => {
-        if(scrolleditemidx != scrolleditemidx_store)
-        {
             console.log(`scrolleditemidx - ${scrolleditemidx} (debounced)`);
-        
             refreshinginfinitylist();
-            scrolleditemidx_store = scrolleditemidx;
-        }
         scrollDebounceTimer = null;
     }, SCROLL_DEBOUNCE_DELAY);
 
@@ -516,24 +577,24 @@ async function makeitem(w,h,x,y,fname,text) {
                 else if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') {
                     item_vid = true;
 
-                    // vidpath = parampath + "/" + encodeURI(fname);
-                    // let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
-                    // const get_result = await indexedDB_get(name);
-                    // if(get_result != undefined) // valid
-                    // {
-                    //     console.log(`prepared - ${name}`);
-                    //     item_img = true;
-                    //     imgpath = get_result['filedata'];
-                    // }
-                    // else // need to extract frame
-                    // {
-                    //     need_video_load = true;
-
-                    //     console.log(`video loading - ${name}`);
-                    // }
-					
                     vidpath = parampath + "/" + encodeURI(fname);
-                    need_video_load = true;
+                    let name = vidpath.substring(vidpath.lastIndexOf('/')+1);
+                    const get_result = await indexedDB_get(name);
+                    if(get_result != undefined) // valid
+                    {
+                        console.log(`prepared - ${name}`);
+                        item_img = true;
+                        imgpath = get_result['filedata'];
+                    }
+                    else // need to extract frame
+                    {
+                        need_video_load = true;
+
+                        console.log(`video loading - ${name}`);
+                    }
+					
+                    // vidpath = parampath + "/" + encodeURI(fname);
+                    // need_video_load = true;
 
                 }
             }
@@ -569,24 +630,7 @@ async function makeitem(w,h,x,y,fname,text) {
         item_enterable = true;
 
         linkelemnts = ``;
-
-        // if(fname.substr(0, 3).toLowerCase() == 'tmw')
-        // // if(false)
-        // {
-        //     linkelemnts = `
-        //     <div class="badge-container">
-        //         <div class="badge">
-        //             VR180PLAY
-        //             <a href="${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
-        //         </div>
-        //     </div>
-        //     `;
-        // }
-        // else
-        // {
-        //     linkelemnts = ``;
-        // }
-
+        
         if(fname.substr(0, 3).toLowerCase() == 'tmw')
         {
             linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
@@ -638,8 +682,8 @@ async function makeitem(w,h,x,y,fname,text) {
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;
-    let videlements = `<video loop autoplay muted src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
-    
+    let videlements = `<video loop muted src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;" ></video>`;
+    // autoplay
     ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; ">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">
         <div class="layer-text" style="box-sizing:border-box">
@@ -989,16 +1033,16 @@ document.addEventListener('keydown', (e) => {
             typingmodecmd = !typingmodecmd;
         }
     }
-    else if(e.key == '\\')
-    {
-        makeitem_Store = [];
-        // 모든 비디오 멈추고 초기화
-        document.querySelectorAll('video').forEach(video => {
-            video.pause();
-            video.currentTime = 0;
-        });
-        refreshinginfinitylist();
-    }
+    // else if(e.key == '\\')
+    // {
+    //     makeitem_Store = [];
+    //     // 모든 비디오 멈추고 초기화
+    //     document.querySelectorAll('video').forEach(video => {
+    //         video.pause();
+    //         video.currentTime = 0;
+    //     });
+    //     refreshinginfinitylist();
+    // }
     else if(e.key == 'Backspace')
     {
 
