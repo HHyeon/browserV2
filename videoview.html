@@ -277,6 +277,7 @@
             let mutevolumestore = 0.00;
 
             let shuffleidx=0;
+            let shuffled = false;
 
             function onKeydown(param)
             {
@@ -343,10 +344,13 @@
                                 // } while(randomitem['d'] == currentfilename);
                                 // currentfilename = randomitem['d'];
 
-                                if(shuffleidx == 0)
+                                if(!shuffled)
                                 {
+                                    shuffleidx = 0;
                                     dirlist.sort(() => Math.random() - 0.5);
+                                    shuffled = true;
                                 }
+
                                 currentfilename = dirlist[shuffleidx]['d'];
                                 shuffleidx++;
                                 if(shuffleidx >= dirlist.length) shuffleidx = 0;
@@ -864,7 +868,7 @@
                         if(setplaytime)
                         {
                             setplaytime = false;
-                            player.currentTime = (player.duration / 10) * (2+Math.random()*3.0);
+                            player.currentTime = (player.duration / 10) * (2.5+Math.random()*1.0);
                             console.log(player.currentTime);
                         }
                     });
