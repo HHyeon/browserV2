@@ -115,9 +115,18 @@
             e.preventDefault();
         });
 
-        viewerElem.addEventListener('mousedown', e => {
+        document.addEventListener('mousedown', e => {
             e.stopPropagation();
-            if(e.button === 2) {
+            console.log('mouse down', e.button, e.clientX, e.clientY);
+            if(e.button == 1) {
+                // middle button: toggle fullscreen
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                }
+            }
+            else if(e.button === 2) {
                 // right button: next if right half, prev if left half
                 const centerX = window.innerWidth / 2;
                 if(e.clientX > centerX) {
@@ -127,45 +136,31 @@
                 }
             }
             else if(e.button === 0) {
-                // left button: begin zoom follow
-                const rect = viewerElem.getBoundingClientRect();
-                const cx = e.clientX - rect.left;
-                const cy = e.clientY - rect.top;
-                // set to full scale
+                // left button: start zoom/pan
+                zoomActive = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                currTranslateX = 0;
+                currTranslateY = 0;
                 viewerElem.style.maxWidth = 'none';
                 viewerElem.style.maxHeight = 'none';
-                viewerElem.style.objectFit = 'none';
-                const dx = window.innerWidth/2 - cx;
-                const dy = window.innerHeight/2 - cy;
-                currTranslateX = dx;
-                currTranslateY = dy;
-                viewerElem.style.transform = `translate(${currTranslateX}px,${currTranslateY}px) scale(1)`;
-                zoomActive = true;
-                document.body.style.cursor = 'none';
+                viewerElem.style.objectFit = 'initial';
+                document.body.style.cursor = 'move';
+            }
+        });
+
+        document.addEventListener('mousemove', e => {
+            if(zoomActive) {
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                currTranslateX += deltaX;
+                currTranslateY += deltaY;
+                viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 startX = e.clientX;
                 startY = e.clientY;
             }
         });
 
-        viewerElem.addEventListener('mousemove', e => {
-            if(zoomActive) {
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-                // compute pan multiplier based on image vs viewport size
-                const iw = viewerElem.naturalWidth || 1;
-                const ih = viewerElem.naturalHeight || 1;
-                const vw = window.innerWidth;
-                const vh = window.innerHeight;
-                const mx = iw / vw;
-                const my = ih / vh;
-                // apply acceleration and inversion
-                currTranslateX -= dx * mx * 1.2;
-                currTranslateY -= dy * my * 1.2;
-                viewerElem.style.transform = `translate(${currTranslateX}px,${currTranslateY}px) scale(1)`;
-                startX = e.clientX;
-                startY = e.clientY;
-            }
-        });
 
         document.addEventListener('mouseup', e => {
             if(zoomActive && e.button === 0) {
