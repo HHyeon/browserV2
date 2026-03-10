@@ -687,6 +687,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     let need_video_load = false;
     let vidpath = '';
     let hasMp4 = false;
+    let hasHighImageRatio = false;
 
     let makeitem_stored = makeitem_Store[fname];
 
@@ -702,6 +703,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                 item_enterable = true;
     
                 let dirbelowimgs = [];
+                let imageCount = 0;
         
                 jsondata["data"].forEach(each => {
                     const name = each["d"];
@@ -711,10 +713,17 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                     
                     fnameext = fnameext.toLowerCase();
                     
-                    if(isImageExt(fnameext)) dirbelowimgs.push(name);
+                    if(isImageExt(fnameext)) {
+                        dirbelowimgs.push(name);
+                        imageCount++;
+                    }
                     if(fnameext == 'mp4') hasMp4 = true;
 
                 })
+        
+                let totalFiles = jsondata["data"].length;
+                let imageRatio = totalFiles > 0 ? imageCount / totalFiles : 0;
+                hasHighImageRatio = imageRatio >= 0.8;
         
                 if(dirbelowimgs.length > 0) {
                     item_img = true;
@@ -776,7 +785,8 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             need_video_load: need_video_load,
             vidpath: vidpath,
             cacheKey: cacheKey,  // ✅ 추가: IndexedDB 캐시 키
-            hasMp4: hasMp4 || false  // 추가: MP4 파일 존재 여부
+            hasMp4: hasMp4 || false,  // 추가: MP4 파일 존재 여부
+            hasHighImageRatio: hasHighImageRatio || false  // 추가: 이미지 파일 80% 이상 여부
         };
     }
     else {
@@ -787,6 +797,9 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         vidpath = makeitem_Store[fname].vidpath;
         need_video_load = makeitem_Store[fname].need_video_load;
         let hasMp4 = makeitem_Store[fname].hasMp4 || false;
+        hasHighImageRatio = makeitem_Store[fname].hasHighImageRatio || false;
+
+        console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}`);
     }
 
     let linkelemnts;
@@ -838,13 +851,17 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                 <a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
             </div>`;
         }
+        let maxviewBadge = '';
+        if(hasHighImageRatio) {
+            maxviewBadge = `<div class="badge">
+                maxview
+                <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
+            </div>`;
+        }
         linkelemnts = `
         <div class="badge-container">
             ${playvidBadge}
-            <div class="badge">
-                maxview
-                <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
-            </div>
+            ${maxviewBadge}
         </div>
         `;
 
