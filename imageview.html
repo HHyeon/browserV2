@@ -145,17 +145,19 @@
                 viewerElem.style.maxWidth = 'none';
                 viewerElem.style.maxHeight = 'none';
                 viewerElem.style.objectFit = 'initial';
+                viewerElem.style.scale = '0.75';
                 document.body.style.cursor = 'move';
             }
         });
 
         document.addEventListener('mousemove', e => {
             if(zoomActive) {
-                const deltaX = e.clientX - startX;
-                const deltaY = e.clientY - startY;
-                currTranslateX += deltaX;
-                currTranslateY += deltaY;
+                const deltaX = (e.clientX - startX) * 3.0;
+                const deltaY = (e.clientY - startY) * 3.0;
+                currTranslateX -= deltaX;
+                currTranslateY -= deltaY;
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
+                viewerElem.style.scale = '0.75';
                 startX = e.clientX;
                 startY = e.clientY;
             }
@@ -169,6 +171,7 @@
                 viewerElem.style.maxHeight = '';
                 viewerElem.style.objectFit = 'contain';
                 viewerElem.style.transform = '';
+                viewerElem.style.scale = '';
                 zoomActive = false;
                 document.body.style.cursor = '';
             }

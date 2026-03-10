@@ -723,7 +723,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         
                 let totalFiles = jsondata["data"].length;
                 let imageRatio = totalFiles > 0 ? imageCount / totalFiles : 0;
-                hasHighImageRatio = imageRatio >= 0.8;
+                hasHighImageRatio = imageRatio >= 0.9;
         
                 if(dirbelowimgs.length > 0) {
                     item_img = true;
