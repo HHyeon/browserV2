@@ -851,8 +851,13 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                 <a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
             </div>`;
         }
+        let imageviewBadge = '';
         let maxviewBadge = '';
         if(hasHighImageRatio) {
+            imageviewBadge = `<div class="badge">
+                imageview
+                <a href="${document.location.origin}${document.location.pathname}/imageview.html?p=${belowpath}" target="_blank" class="item-badge-link"></a>
+            </div>`;
             maxviewBadge = `<div class="badge">
                 maxview
                 <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
@@ -861,6 +866,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         linkelemnts = `
         <div class="badge-container">
             ${playvidBadge}
+            ${imageviewBadge}
             ${maxviewBadge}
         </div>
         `;

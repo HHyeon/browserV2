@@ -1,0 +1,210 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>imageviewer</title>
+    <style>
+        body {
+            margin:0;
+            background-color:#000;
+            color:#fff;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            height:100vh;
+            overflow:hidden;
+        }
+        img {
+            max-width:100%;
+            max-height:100%;
+            object-fit:contain;
+        }
+        #info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-size: small;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <img id="viewer" src="" alt="" style="cursor:pointer;" draggable="false" />
+    <div id="info"></div>
+
+    <script>
+        async function dirseek(param) {
+            try {
+                const res = await fetch(`dirseek.php?x=${param}`, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } catch (e) {
+                console.error('dirseek failed', e);
+                return { ret: false, data: [] };
+            }
+        }
+
+        function isImage(name) {
+            const ext = name.substring(name.lastIndexOf('.')+1).toLowerCase();
+            return ['jpg','jpeg','png','gif','bmp','webp'].includes(ext);
+        }
+
+        document.addEventListener('wheel', e => {
+            e.preventDefault();
+            if(e.deltaY > 0) {
+                nextImage(); // scroll down -> next
+            } else {
+                showImage(idx-1); // scroll up -> previous
+            }
+        }, { passive: false });
+
+        const urlParams = (new URL(window.location.href)).searchParams;
+        let parampath = urlParams.get('p');
+        if(parampath && parampath.endsWith('/')) parampath = parampath.slice(0,-1);
+        if(!parampath) parampath = '.';
+        document.title = parampath.substring(parampath.lastIndexOf('/')+1);
+
+        let images = [];
+        let idx = 0;
+
+        async function startup() {
+            const json = await dirseek(parampath);
+            if(json.ret) {
+                images = json.data.map(d=>d.d).filter(isImage).sort((a,b)=>a.localeCompare(b));
+                if(images.length>0) {
+                    showImage(0);
+                } else {
+                    console.log('no images');
+                }
+            }
+        }
+
+        function showImage(i) {
+            idx = (i + images.length) % images.length;
+            const img = document.getElementById('viewer');
+            img.src = parampath + '/' + encodeURI(images[idx]);
+            document.title = images[idx];
+            // 정보 표시 업데이트
+            const info = document.getElementById('info');
+            info.textContent = `${idx + 1}/${images.length} ${images[idx]}`;
+        }
+
+        function nextImage() {
+            if(images.length>0) {
+                showImage(idx+1);
+            }
+        }
+
+        let zoomActive = false;
+        let startX = 0, startY = 0;
+        let currTranslateX = 0, currTranslateY = 0;
+        const viewerElem = document.getElementById('viewer');
+
+        // disable context menu so right-click can navigate
+        viewerElem.addEventListener('contextmenu', e => {
+            e.preventDefault();
+        });
+        // prevent built-in drag behavior on the image
+        viewerElem.addEventListener('dragstart', e => {
+            e.preventDefault();
+        });
+        // also block context menu on whole document to be safe
+        document.addEventListener('contextmenu', e => {
+            e.preventDefault();
+        });
+
+        viewerElem.addEventListener('mousedown', e => {
+            e.stopPropagation();
+            if(e.button === 2) {
+                // right button: next if right half, prev if left half
+                const centerX = window.innerWidth / 2;
+                if(e.clientX > centerX) {
+                    nextImage(); // right side -> next
+                } else {
+                    showImage(idx-1); // left side -> previous
+                }
+            }
+            else if(e.button === 0) {
+                // left button: begin zoom follow
+                const rect = viewerElem.getBoundingClientRect();
+                const cx = e.clientX - rect.left;
+                const cy = e.clientY - rect.top;
+                // set to full scale
+                viewerElem.style.maxWidth = 'none';
+                viewerElem.style.maxHeight = 'none';
+                viewerElem.style.objectFit = 'none';
+                const dx = window.innerWidth/2 - cx;
+                const dy = window.innerHeight/2 - cy;
+                currTranslateX = dx;
+                currTranslateY = dy;
+                viewerElem.style.transform = `translate(${currTranslateX}px,${currTranslateY}px) scale(1)`;
+                zoomActive = true;
+                document.body.style.cursor = 'none';
+                startX = e.clientX;
+                startY = e.clientY;
+            }
+        });
+
+        viewerElem.addEventListener('mousemove', e => {
+            if(zoomActive) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                // compute pan multiplier based on image vs viewport size
+                const iw = viewerElem.naturalWidth || 1;
+                const ih = viewerElem.naturalHeight || 1;
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const mx = iw / vw;
+                const my = ih / vh;
+                // apply acceleration and inversion
+                currTranslateX -= dx * mx * 1.2;
+                currTranslateY -= dy * my * 1.2;
+                viewerElem.style.transform = `translate(${currTranslateX}px,${currTranslateY}px) scale(1)`;
+                startX = e.clientX;
+                startY = e.clientY;
+            }
+        });
+
+        document.addEventListener('mouseup', e => {
+            if(zoomActive && e.button === 0) {
+                // reset
+                viewerElem.style.maxWidth = '';
+                viewerElem.style.maxHeight = '';
+                viewerElem.style.objectFit = 'contain';
+                viewerElem.style.transform = '';
+                zoomActive = false;
+                document.body.style.cursor = '';
+            }
+        });
+
+        document.addEventListener('keydown', e=>{
+            if(e.key=='ArrowRight' || e.key==' ' ) nextImage();
+            else if(e.key=='ArrowLeft') showImage(idx-1);
+            else if(e.key=='Enter') {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                }
+            }
+            else if(/^[0-9]$/.test(e.key)) {
+                if(images.length>0) {
+                    let step = parseInt(e.key);
+                    let target;
+                    if(step === 0) {
+                        target = 0; // first image
+                    } else {
+                        target = Math.floor(images.length * (step/10));
+                        if(target >= images.length) target = images.length -1;
+                    }
+                    showImage(target);
+                }
+            }
+        });
+
+        startup();
+    </script>
+</body>
+</html>
