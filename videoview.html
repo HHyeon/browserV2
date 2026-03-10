@@ -145,7 +145,10 @@
                 setCookie('parampath', '', 0);
             }
             console.log(`parampath: ${parampath}`);
-            
+            // strip trailing slash if user supplied a folder with slash
+            if(parampath && parampath.endsWith('/')) {
+                parampath = parampath.slice(0, -1);
+            }
             document.title = parampath.substring(parampath.lastIndexOf('/')+1);
 
             let paramfind = getCookie('paramfind');
@@ -744,7 +747,7 @@
                     let diff = param.x - leftmousedownpos;
                     if(diff > scroll_range) diff = scroll_range;
                     diff = parseInt(diff);
-                    const maxpushduration = 180.0 // second
+                    const maxpushduration = 300.0 // second
                     let positionscroll = parseInt(diff / scroll_range * maxpushduration);
 
                     positionscroll /= min_seeking_unit;
@@ -815,31 +818,40 @@
                 if(parampath != null)
                 {
                     console.log(`parampath - ${parampath}`);
-                    currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
-                    currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
+                    // determine if parameter is a directory or file
+                    let isDir = !parampath.toLowerCase().endsWith('.mp4');
+                    if(isDir)
+                    {
+                        currentdir = parampath;
+                        if(currentdir.endsWith('/')) currentdir = currentdir.slice(0, -1);
+                    }
+                    else
+                    {
+                        currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
+                        currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
+                    }
 
-                    const jsondata=await dirseek(currentdir); 
+                    const jsondata = await dirseek(currentdir);
                     
                     if(jsondata["ret"])
                     {
                         dirlist = jsondata["data"];
                         
+                        // remove hidden files
                         while(true) {  
                             const find__ = dirlist.find((a) => { return a["d"][0] == '.';});
                             if(find__ == undefined) break;
-                            // console.log(`ignore - ${find__["d"]}`);
                             const idx = dirlist.lastIndexOf(find__);
                             dirlist.splice(idx, 1);
                         }
 
+                        // keep only mp4s
                         while(true) {  
                             const find__ = dirlist.find((a) => { return a["d"].substr(a["d"].lastIndexOf('.')) != ".mp4" });
                             if(find__ == undefined) break;
-                            // console.log(`ignore - ${find__["d"]}`);
                             const idx = dirlist.lastIndexOf(find__);
                             dirlist.splice(idx, 1);
                         }
-
                     }
                     
                     for(let i=0;i<dirlist.length;i++)
@@ -849,18 +861,31 @@
                     
                     dirlist.sort((a,b) => { return b["t"] - a["t"]; });
 
-                    
                     if(paramfind != null)
                     {
                         console.log(`filtering by ${paramfind}`);   
-                        
                         dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
                     }
 
-                        
                     dirlist = dirlist.filter(e => !e["d"].toLowerCase().includes('tmw'));
 
                     console.log(dirlist);
+
+                    // if caller passed a directory and it's empty, abort
+                    if(isDir && dirlist.length === 0) {
+                        console.log('no mp4 files in directory');
+                        return;
+                    }
+
+                    // if caller passed a directory, pick a random file now
+                    if(isDir && dirlist.length > 0)
+                    {
+                        const randomitem = dirlist[Math.floor(Math.random() * dirlist.length)];
+                        currentfilename = randomitem['d'];
+                        parampath = currentdir + '/' + currentfilename;
+                        setplaytime = true;
+                        console.log(`random selected - ${currentfilename}`);
+                    }
 
                     player = document.getElementById("player");
                     player.src = parampath;
@@ -881,16 +906,6 @@
                     player.volume = 0.2;
                     
                     setLabelText(currentfilename);
-
-                    // var promise = player.play();
-
-                    // if(promise != undefined) {
-                    //     promise.then(_ => {
-                    //         console.log("promise returned Successed");
-                    //     }).catch(error => {
-                    //         console.log("promise returned failed");
-                    //     });
-                    // }
 
                     window.addEventListener("keydown", onKeydown);
                 }

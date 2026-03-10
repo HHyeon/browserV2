@@ -686,6 +686,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     let item_vid = false;
     let need_video_load = false;
     let vidpath = '';
+    let hasMp4 = false;
 
     let makeitem_stored = makeitem_Store[fname];
 
@@ -711,6 +712,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                     fnameext = fnameext.toLowerCase();
                     
                     if(isImageExt(fnameext)) dirbelowimgs.push(name);
+                    if(fnameext == 'mp4') hasMp4 = true;
 
                 })
         
@@ -773,7 +775,8 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             item_vid: item_vid,
             need_video_load: need_video_load,
             vidpath: vidpath,
-            cacheKey: cacheKey  // ✅ 추가: IndexedDB 캐시 키
+            cacheKey: cacheKey,  // ✅ 추가: IndexedDB 캐시 키
+            hasMp4: hasMp4 || false  // 추가: MP4 파일 존재 여부
         };
     }
     else {
@@ -783,6 +786,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         item_vid = makeitem_Store[fname].item_vid;
         vidpath = makeitem_Store[fname].vidpath;
         need_video_load = makeitem_Store[fname].need_video_load;
+        let hasMp4 = makeitem_Store[fname].hasMp4 || false;
     }
 
     let linkelemnts;
@@ -826,20 +830,28 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             console.log(`expect "drvs/" (${belowpath})`);
         }
 
-        linkelemnts = ``;
-
+        // build badge container with both maxview and direct-play links
+        let playvidBadge = '';
+        if(hasMp4) {
+            playvidBadge = `<div class="badge">
+                playvid 
+                <a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+            </div>`;
+        }
         linkelemnts = `
         <div class="badge-container">
+            ${playvidBadge}
             <div class="badge">
                 maxview
                 <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
             </div>
-            <div class="badge">
-                wexpl
-                <a href="winexplr://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
-            </div>
         </div>
         `;
+
+            // <div class="badge">
+            //     wexpl
+            //     <a href="winexplr://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
+            // </div>
     
         linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
     }
