@@ -17,6 +17,8 @@
             max-width:100%;
             max-height:100%;
             object-fit:contain;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
         #info {
             position: absolute;
@@ -30,7 +32,7 @@
         }
     </style>
 </head>
-<body>
+<body draggable="false">
     <img id="viewer" src="" alt="" style="cursor:pointer;" draggable="false" />
     <div id="info"></div>
 
@@ -85,6 +87,13 @@
             idx = (i + images.length) % images.length;
             const img = document.getElementById('viewer');
             img.src = parampath + '/' + encodeURI(images[idx]);
+
+            if(img.complete) {
+                onImageLoaded();
+            } else {
+                img.onload = onImageLoaded;
+            }
+
             document.title = images[idx];
             // 정보 표시 업데이트
             const info = document.getElementById('info');
@@ -102,6 +111,13 @@
         let currTranslateX = 0, currTranslateY = 0;
         const viewerElem = document.getElementById('viewer');
 
+        function onImageLoaded() {
+            console.log(`image : ${viewerElem.naturalWidth}, ${viewerElem.naturalHeight}` + 
+                         ` window: ${window.innerWidth}, ${window.innerHeight}` + 
+                         ` viewport: ${viewerElem.clientWidth}, ${viewerElem.clientHeight}`
+                        );
+        }
+
         // disable context menu so right-click can navigate
         viewerElem.addEventListener('contextmenu', e => {
             e.preventDefault();
@@ -115,9 +131,12 @@
             e.preventDefault();
         });
 
+        let zoom_moveing_scale = 3.0;
+        let zoom_view_scale = 1.0;
+
         document.addEventListener('mousedown', e => {
             e.stopPropagation();
-            console.log('mouse down', e.button, e.clientX, e.clientY);
+            console.log('mouse down', e.clientX, e.clientY);
             if(e.button == 1) {
                 // middle button: toggle fullscreen
                 if (!document.fullscreenElement) {
@@ -137,27 +156,48 @@
             }
             else if(e.button === 0) {
                 // left button: start zoom/pan
+
+                let mousexinmgs_beforezoom = e.clientX - viewerElem.getBoundingClientRect().left;
+                let mouseyinmgs_beforezoom = e.clientY - viewerElem.getBoundingClientRect().top;
+                console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+
+                let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.clientWidth) * viewerElem.naturalWidth;
+                let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.clientHeight) * viewerElem.naturalHeight;
+                console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
+
+                let mouseXfromcenter = e.clientX - window.innerWidth/2;
+                let mouseYfromcenter = e.clientY - window.innerHeight/2;
+                console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+
+                mousexinmgs_realimg -= mouseXfromcenter / zoom_view_scale;
+                mouseyinmgs_realimg -= mouseYfromcenter / zoom_view_scale;
+
                 zoomActive = true;
                 startX = e.clientX;
                 startY = e.clientY;
-                currTranslateX = 0;
-                currTranslateY = 0;
+                currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
+                currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
+
+                // currTranslateX += mouseXfromcenter
+                // currTranslateY += mouseYfromcenter;
+
+                viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 viewerElem.style.maxWidth = 'none';
                 viewerElem.style.maxHeight = 'none';
                 viewerElem.style.objectFit = 'initial';
-                viewerElem.style.scale = '0.75';
+                viewerElem.style.scale = zoom_view_scale;
                 document.body.style.cursor = 'move';
             }
         });
 
         document.addEventListener('mousemove', e => {
             if(zoomActive) {
-                const deltaX = (e.clientX - startX) * 3.0;
-                const deltaY = (e.clientY - startY) * 3.0;
+                const deltaX = (e.clientX - startX) * zoom_moveing_scale;
+                const deltaY = (e.clientY - startY) * zoom_moveing_scale;
                 currTranslateX -= deltaX;
                 currTranslateY -= deltaY;
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-                viewerElem.style.scale = '0.75';
+                viewerElem.style.scale = zoom_view_scale;
                 startX = e.clientX;
                 startY = e.clientY;
             }
