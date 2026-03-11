@@ -62,10 +62,11 @@
 
     <script>
 
-        const PANNINGZOOM_VIEW_SCALE = 0.75;
+        let PANNINGZOOM_VIEW_SCALE = 1.0;
         const RIGHT_DRAG_THRESHOLD = window.innerWidth/10; // 10 slots per screen width
 
 
+        PANNINGZOOM_VIEW_SCALE /= window.devicePixelRatio || 1; // adjust for high-DPI screens
 
 
 
@@ -258,21 +259,21 @@
 
                 let mousexinmgs_beforezoom = e.clientX - viewerElem.getBoundingClientRect().left;
                 let mouseyinmgs_beforezoom = e.clientY - viewerElem.getBoundingClientRect().top;
-                // console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+                console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
 
                 if(mousexinmgs_beforezoom < 0 || mousexinmgs_beforezoom > viewerElem.clientWidth ||
                    mouseyinmgs_beforezoom < 0 || mouseyinmgs_beforezoom > viewerElem.clientHeight) {
-                    // console.log('mouse outside image, ignoring zoom');
+                    console.log('mouse outside image, ignoring zoom');
                 }
                 else
                 {
                     let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.clientWidth) * viewerElem.naturalWidth;
                     let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.clientHeight) * viewerElem.naturalHeight;
-                    // console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
+                    console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
 
                     let mouseXfromcenter = e.clientX - window.innerWidth/2;
                     let mouseYfromcenter = e.clientY - window.innerHeight/2;
-                    // console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+                    console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
 
                     mousexinmgs_realimg -= mouseXfromcenter / PANNINGZOOM_VIEW_SCALE;
                     mouseyinmgs_realimg -= mouseYfromcenter / PANNINGZOOM_VIEW_SCALE;
@@ -283,11 +284,12 @@
                     currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
                     currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
                     
-                    // clamp translation at start to keep image inside viewport
-                    const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
-                    const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
-                    currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
-                    currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
+                    // TODO Later !!!
+                    // // clamp translation at start to keep image inside viewport
+                    // const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+                    // const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
+                    // currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+                    // currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
 
                     viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                     viewerElem.style.maxWidth = 'none';
@@ -312,15 +314,11 @@
                 currTranslateX -= deltaX;
                 currTranslateY -= deltaY;
 
-                // 이동 범위 제한
-                const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
-                const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
-
-                // 이동 범위 제한
-                currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
-                currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
-
-                // console.log(`translate: ${currTranslateX}, ${currTranslateY}, limit: ${maxTranslateX}, ${maxTranslateY}`);
+                // TODO Later !!!
+                // const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+                // const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
+                // currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+                // currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
                 
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
@@ -374,12 +372,13 @@
                 if(isRightDragging) {
                     const deltaX = e.clientX - rightDragStartX;
                     const absDelta = Math.abs(deltaX);
+                    const clickBorder = window.innerWidth / 3;
                     
                     if(absDelta < RIGHT_DRAG_THRESHOLD) {
-                        if(e.clientX > window.innerWidth / 3 * 2) {
+                        if(e.clientX > clickBorder) {
                             nextImage();
                             // console.log('right click: next');
-                        } else if(e.clientX < window.innerWidth / 3) {
+                        } else if(e.clientX < clickBorder) {
                             showImage(idx-1);
                             // console.log('right click: previous');
                         }
