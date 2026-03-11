@@ -125,13 +125,15 @@
 
         document.addEventListener('wheel', e => {
             e.preventDefault();
+
+            console.log('wheel', e.deltaY);
             
-            if(e.deltaY > 100) {
+            if(e.deltaY >= 100) {
 
-                // nextImage(); // scroll down -> next
-            } else if(e.deltaY < -100) {
+                nextImage(); // scroll down -> next
+            } else if(e.deltaY <= -100) {
 
-                // showImage(idx-1); // scroll up -> previous
+                showImage(idx-1); // scroll up -> previous
             }
         }, { passive: false });
 
@@ -284,12 +286,12 @@
                     currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
                     currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
                     
-                    // TODO Later !!!
-                    // // clamp translation at start to keep image inside viewport
-                    // const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
-                    // const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
-                    // currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
-                    // currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
+                    const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+                    const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
+                    if(maxTranslateX < 0) currTranslateX = 0;
+                    else currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+                    if(maxTranslateY < 0) currTranslateY = 0;
+                    else currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
 
                     viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                     viewerElem.style.maxWidth = 'none';
@@ -314,11 +316,12 @@
                 currTranslateX -= deltaX;
                 currTranslateY -= deltaY;
 
-                // TODO Later !!!
-                // const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
-                // const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
-                // currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
-                // currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
+                const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+                const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
+                if(maxTranslateX < 0) currTranslateX = 0;
+                else currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+                if(maxTranslateY < 0) currTranslateY = 0;
+                else currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
                 
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
