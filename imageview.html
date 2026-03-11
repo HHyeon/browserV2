@@ -55,11 +55,13 @@
 
         document.addEventListener('wheel', e => {
             e.preventDefault();
-            // console.log(`type - ${e.x}, ${e.y} delta - ${e.deltaX}, ${e.deltaY} `);
+            
             if(e.deltaY > 100) {
-                nextImage(); // scroll down -> next
+
+                // nextImage(); // scroll down -> next
             } else if(e.deltaY < -100) {
-                showImage(idx-1); // scroll up -> previous
+
+                // showImage(idx-1); // scroll up -> previous
             }
         }, { passive: false });
 
@@ -166,31 +168,45 @@
 
                 let mousexinmgs_beforezoom = e.clientX - viewerElem.getBoundingClientRect().left;
                 let mouseyinmgs_beforezoom = e.clientY - viewerElem.getBoundingClientRect().top;
-                // console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+                console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
 
-                let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.clientWidth) * viewerElem.naturalWidth;
-                let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.clientHeight) * viewerElem.naturalHeight;
-                // console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
+                if(mousexinmgs_beforezoom < 0 || mousexinmgs_beforezoom > viewerElem.clientWidth ||
+                   mouseyinmgs_beforezoom < 0 || mouseyinmgs_beforezoom > viewerElem.clientHeight) {
+                    console.log('mouse outside image, ignoring zoom');
+                }
+                else
+                {
+                    let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.clientWidth) * viewerElem.naturalWidth;
+                    let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.clientHeight) * viewerElem.naturalHeight;
+                    // console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
 
-                let mouseXfromcenter = e.clientX - window.innerWidth/2;
-                let mouseYfromcenter = e.clientY - window.innerHeight/2;
-                // console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+                    let mouseXfromcenter = e.clientX - window.innerWidth/2;
+                    let mouseYfromcenter = e.clientY - window.innerHeight/2;
+                    // console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
 
-                mousexinmgs_realimg -= mouseXfromcenter / zoom_view_scale;
-                mouseyinmgs_realimg -= mouseYfromcenter / zoom_view_scale;
+                    mousexinmgs_realimg -= mouseXfromcenter / zoom_view_scale;
+                    mouseyinmgs_realimg -= mouseYfromcenter / zoom_view_scale;
 
-                zoomActive = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
-                currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
+                    zoomActive = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
+                    currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
+                    
+                    // clamp translation at start to keep image inside viewport
+                    const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/zoom_view_scale);
+                    const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/zoom_view_scale);
+                    currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+                    currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
 
-                viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-                viewerElem.style.maxWidth = 'none';
-                viewerElem.style.maxHeight = 'none';
-                viewerElem.style.objectFit = 'initial';
-                viewerElem.style.scale = zoom_view_scale;
-                document.body.style.cursor = 'move';
+                    viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
+                    viewerElem.style.maxWidth = 'none';
+                    viewerElem.style.maxHeight = 'none';
+                    viewerElem.style.objectFit = 'initial';
+                    viewerElem.style.scale = zoom_view_scale;
+                    document.body.style.cursor = 'move';
+                }
+
             }
         });
 
@@ -200,6 +216,17 @@
                 const deltaY = (e.clientY - startY) * zoom_moveing_scale_y;
                 currTranslateX -= deltaX;
                 currTranslateY -= deltaY;
+
+                // 이동 범위 제한
+                const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/zoom_view_scale);
+                const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/zoom_view_scale);
+
+                // 이동 범위 제한
+                currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+                currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
+
+                console.log(`translate: ${currTranslateX}, ${currTranslateY}, limit: ${maxTranslateX}, ${maxTranslateY}`);
+                
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 viewerElem.style.scale = zoom_view_scale;
                 startX = e.clientX;
