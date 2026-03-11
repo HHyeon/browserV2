@@ -55,9 +55,10 @@
 
         document.addEventListener('wheel', e => {
             e.preventDefault();
-            if(e.deltaY > 0) {
+            // console.log(`type - ${e.x}, ${e.y} delta - ${e.deltaX}, ${e.deltaY} `);
+            if(e.deltaY > 100) {
                 nextImage(); // scroll down -> next
-            } else {
+            } else if(e.deltaY < -100) {
                 showImage(idx-1); // scroll up -> previous
             }
         }, { passive: false });
@@ -111,11 +112,20 @@
         let currTranslateX = 0, currTranslateY = 0;
         const viewerElem = document.getElementById('viewer');
 
+        let zoom_moveing_scale_x = 1;
+        let zoom_moveing_scale_y = 1;
+
+        const zoom_view_scale = 0.75;
+
         function onImageLoaded() {
             console.log(`image : ${viewerElem.naturalWidth}, ${viewerElem.naturalHeight}` + 
                          ` window: ${window.innerWidth}, ${window.innerHeight}` + 
                          ` viewport: ${viewerElem.clientWidth}, ${viewerElem.clientHeight}`
                         );
+
+            zoom_moveing_scale_x = viewerElem.naturalWidth / window.innerWidth;
+            zoom_moveing_scale_y = viewerElem.naturalHeight / window.innerHeight;
+            console.log(`moveing scale: ${zoom_moveing_scale_x}, ${zoom_moveing_scale_y}`);
         }
 
         // disable context menu so right-click can navigate
@@ -130,9 +140,6 @@
         document.addEventListener('contextmenu', e => {
             e.preventDefault();
         });
-
-        let zoom_moveing_scale = 3.0;
-        let zoom_view_scale = 1.0;
 
         document.addEventListener('mousedown', e => {
             e.stopPropagation();
@@ -159,15 +166,15 @@
 
                 let mousexinmgs_beforezoom = e.clientX - viewerElem.getBoundingClientRect().left;
                 let mouseyinmgs_beforezoom = e.clientY - viewerElem.getBoundingClientRect().top;
-                console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+                // console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
 
                 let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.clientWidth) * viewerElem.naturalWidth;
                 let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.clientHeight) * viewerElem.naturalHeight;
-                console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
+                // console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
 
                 let mouseXfromcenter = e.clientX - window.innerWidth/2;
                 let mouseYfromcenter = e.clientY - window.innerHeight/2;
-                console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+                // console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
 
                 mousexinmgs_realimg -= mouseXfromcenter / zoom_view_scale;
                 mouseyinmgs_realimg -= mouseYfromcenter / zoom_view_scale;
@@ -177,9 +184,6 @@
                 startY = e.clientY;
                 currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
                 currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
-
-                // currTranslateX += mouseXfromcenter
-                // currTranslateY += mouseYfromcenter;
 
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 viewerElem.style.maxWidth = 'none';
@@ -192,8 +196,8 @@
 
         document.addEventListener('mousemove', e => {
             if(zoomActive) {
-                const deltaX = (e.clientX - startX) * zoom_moveing_scale;
-                const deltaY = (e.clientY - startY) * zoom_moveing_scale;
+                const deltaX = (e.clientX - startX) * zoom_moveing_scale_x;
+                const deltaY = (e.clientY - startY) * zoom_moveing_scale_y;
                 currTranslateX -= deltaX;
                 currTranslateY -= deltaY;
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
