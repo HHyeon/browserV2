@@ -30,13 +30,45 @@
             padding: 5px;
             border-radius: 3px;
         }
+
+        #viewbox {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 120px;
+            height: 120px;
+            border: 1px solid rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.05);
+            box-sizing: border-box;
+            pointer-events: none; /* overlay should not block mouse events */
+            z-index: 1000;
+        }
+        #viewbox-zoom {
+            position: absolute;
+            border: 1px solid rgba(255,0,0,0.8);
+            background: rgba(255,0,0,0.2);
+            box-sizing: border-box;
+        }
+        
     </style>
 </head>
 <body draggable="false">
-    <img id="viewer" src="" alt="" style="cursor:pointer;" draggable="false" />
+    <img id="viewer" src="" alt="" draggable="false" decoding="async" fetchpriority="high"/>
     <div id="info"></div>
 
+    <div id="viewbox" style="visibility:hidden;">
+        <div id="viewbox-zoom"></div>
+    </div>
+
     <script>
+
+        const PANNINGZOOM_VIEW_SCALE = 0.75;
+        const RIGHT_DRAG_THRESHOLD = window.innerWidth/10; // 10 slots per screen width
+
+
+
+
+
         async function dirseek(param) {
             try {
                 const res = await fetch(`dirseek.php?x=${param}`, { cache: 'no-store' });
@@ -52,6 +84,43 @@
             const ext = name.substring(name.lastIndexOf('.')+1).toLowerCase();
             return ['jpg','jpeg','png','gif','bmp','webp'].includes(ext);
         }
+
+        const zoomBoxview = document.getElementById('viewbox');
+        
+        function updateViewbox() {
+            const viewer = viewerElem;
+            if (!viewer.naturalWidth || !viewer.naturalHeight) return;
+
+            const rect = viewer.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            // intersection of image rect with viewport
+            const x1 = Math.max(0, rect.left);
+            const y1 = Math.max(0, rect.top);
+            const x2 = Math.min(vw, rect.right);
+            const y2 = Math.min(vh, rect.bottom);
+            const visibleW = x2 - x1;
+            const visibleH = y2 - y1;
+
+            // map to image coordinates
+            const scaleX = viewer.naturalWidth / rect.width;
+            const scaleY = viewer.naturalHeight / rect.height;
+            const leftImg = (x1 - rect.left) * scaleX;
+            const topImg  = (y1 - rect.top) * scaleY;
+            const wImg    = visibleW * scaleX;
+            const hImg    = visibleH * scaleY;
+
+            const zoomBox = document.getElementById('viewbox-zoom');
+            zoomBox.style.left   = (leftImg / viewer.naturalWidth * 100) + '%';
+            zoomBox.style.top    = (topImg  / viewer.naturalHeight * 100) + '%';
+            zoomBox.style.width  = (wImg    / viewer.naturalWidth * 100) + '%';
+            zoomBox.style.height = (hImg    / viewer.naturalHeight * 100) + '%';
+        }
+
+        // document.addEventListener('DOMContentLoaded', () => {
+        //     updateViewbox();
+        // });
 
         document.addEventListener('wheel', e => {
             e.preventDefault();
@@ -93,8 +162,12 @@
 
             if(img.complete) {
                 onImageLoaded();
+                updateViewbox();   // ensure overlay after navigation
             } else {
-                img.onload = onImageLoaded;
+                img.onload = () => {
+                    onImageLoaded();
+                    updateViewbox();
+                };
             }
 
             document.title = images[idx];
@@ -117,8 +190,6 @@
         let zoom_moveing_scale_x = 1;
         let zoom_moveing_scale_y = 1;
 
-        const zoom_view_scale = 0.75;
-
         function onImageLoaded() {
             console.log(`image : ${viewerElem.naturalWidth}, ${viewerElem.naturalHeight}` + 
                          ` window: ${window.innerWidth}, ${window.innerHeight}` + 
@@ -128,6 +199,10 @@
             zoom_moveing_scale_x = viewerElem.naturalWidth / window.innerWidth;
             zoom_moveing_scale_y = viewerElem.naturalHeight / window.innerHeight;
             console.log(`moveing scale: ${zoom_moveing_scale_x}, ${zoom_moveing_scale_y}`);
+
+            updateViewbox();
+
+            zoomBoxview.style.visibility = 'hidden';
         }
 
         // disable context menu so right-click can navigate
@@ -143,9 +218,17 @@
             e.preventDefault();
         });
 
+        // Update overlay on window resize
+        window.addEventListener('resize', () => {
+            if (!zoomActive) updateViewbox(); // only if not zooming
+        });
+
+        let rightDragStartX = 0;
+        let isRightDragging = false;
+
         document.addEventListener('mousedown', e => {
             e.stopPropagation();
-            console.log('mouse down', e.clientX, e.clientY);
+            // console.log('mouse down', e.clientX, e.clientY);
             if(e.button == 1) {
                 // middle button: toggle fullscreen
                 if (!document.fullscreenElement) {
@@ -155,24 +238,31 @@
                 }
             }
             else if(e.button === 2) {
-                // right button: next if right half, prev if left half
-                const centerX = window.innerWidth / 2;
-                if(e.clientX > centerX) {
-                    nextImage(); // right side -> next
-                } else {
-                    showImage(idx-1); // left side -> previous
-                }
+                // // right button: next if right half, prev if left half
+                // const centerX = window.innerWidth / 2;
+                // if(e.clientX > centerX) {
+                //     nextImage(); // right side -> next
+                // } else {
+                //     showImage(idx-1); // left side -> previous
+                // }
+
+                // right button: start drag detection
+                rightDragStartX = e.clientX;
+                isRightDragging = true;
+                // do NOT trigger navigation here; will decide on mouseup or drag
+            
+                // console.log('right drag start', rightDragStartX);
             }
             else if(e.button === 0) {
                 // left button: start zoom/pan
 
                 let mousexinmgs_beforezoom = e.clientX - viewerElem.getBoundingClientRect().left;
                 let mouseyinmgs_beforezoom = e.clientY - viewerElem.getBoundingClientRect().top;
-                console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+                // console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
 
                 if(mousexinmgs_beforezoom < 0 || mousexinmgs_beforezoom > viewerElem.clientWidth ||
                    mouseyinmgs_beforezoom < 0 || mouseyinmgs_beforezoom > viewerElem.clientHeight) {
-                    console.log('mouse outside image, ignoring zoom');
+                    // console.log('mouse outside image, ignoring zoom');
                 }
                 else
                 {
@@ -184,8 +274,8 @@
                     let mouseYfromcenter = e.clientY - window.innerHeight/2;
                     // console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
 
-                    mousexinmgs_realimg -= mouseXfromcenter / zoom_view_scale;
-                    mouseyinmgs_realimg -= mouseYfromcenter / zoom_view_scale;
+                    mousexinmgs_realimg -= mouseXfromcenter / PANNINGZOOM_VIEW_SCALE;
+                    mouseyinmgs_realimg -= mouseYfromcenter / PANNINGZOOM_VIEW_SCALE;
 
                     zoomActive = true;
                     startX = e.clientX;
@@ -194,8 +284,8 @@
                     currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
                     
                     // clamp translation at start to keep image inside viewport
-                    const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/zoom_view_scale);
-                    const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/zoom_view_scale);
+                    const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+                    const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
                     currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
                     currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
 
@@ -203,8 +293,13 @@
                     viewerElem.style.maxWidth = 'none';
                     viewerElem.style.maxHeight = 'none';
                     viewerElem.style.objectFit = 'initial';
-                    viewerElem.style.scale = zoom_view_scale;
-                    document.body.style.cursor = 'move';
+                    viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
+                    
+                    viewerElem.style.cursor = 'none';
+                    document.body.style.cursor = 'none';
+                    
+                    zoomBoxview.style.visibility = 'visible';
+                    updateViewbox();
                 }
 
             }
@@ -218,20 +313,42 @@
                 currTranslateY -= deltaY;
 
                 // 이동 범위 제한
-                const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/zoom_view_scale);
-                const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/zoom_view_scale);
+                const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+                const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
 
                 // 이동 범위 제한
                 currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
                 currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
 
-                console.log(`translate: ${currTranslateX}, ${currTranslateY}, limit: ${maxTranslateX}, ${maxTranslateY}`);
+                // console.log(`translate: ${currTranslateX}, ${currTranslateY}, limit: ${maxTranslateX}, ${maxTranslateY}`);
                 
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-                viewerElem.style.scale = zoom_view_scale;
+                viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
                 startX = e.clientX;
                 startY = e.clientY;
+
+                updateViewbox();
             }
+            
+            if(isRightDragging) {
+                const deltaX = e.clientX - rightDragStartX;
+                const absDelta = Math.abs(deltaX);
+                // console.log(`absDelta: ${absDelta}, threshold: ${RIGHT_DRAG_THRESHOLD}, rightDragStartX: ${rightDragStartX}`);
+                if(absDelta >= RIGHT_DRAG_THRESHOLD) {
+                    const steps = Math.floor(absDelta / RIGHT_DRAG_THRESHOLD);
+                    const dir = deltaX > 0 ? 1 : -1;   // 1 → next, -1 → prev
+                    for(let i = 0; i < steps; i++) {
+                        if(dir > 0) {
+                            nextImage();
+                        } else {
+                            showImage(idx-1);
+                        }
+                    }
+                    // advance the reference point by the used distance
+                    rightDragStartX = e.clientX;
+                }
+            }
+            
         });
 
 
@@ -244,8 +361,37 @@
                 viewerElem.style.transform = '';
                 viewerElem.style.scale = '';
                 zoomActive = false;
+
+                viewerElem.style.cursor = '';
                 document.body.style.cursor = '';
+            
+                zoomBoxview.style.visibility = 'hidden';
             }
+
+                
+            // --- finalize right‑button drag or click ---
+            if(e.button === 2) {
+                if(isRightDragging) {
+                    const deltaX = e.clientX - rightDragStartX;
+                    const absDelta = Math.abs(deltaX);
+                    
+                    if(absDelta < RIGHT_DRAG_THRESHOLD) {
+                        if(e.clientX > window.innerWidth / 3 * 2) {
+                            nextImage();
+                            // console.log('right click: next');
+                        } else if(e.clientX < window.innerWidth / 3) {
+                            showImage(idx-1);
+                            // console.log('right click: previous');
+                        }
+                        else
+                        {
+                            // console.log('right click: ignored (center area)');
+                        }
+                    }
+                    isRightDragging = false;
+                }
+            }
+            
         });
 
         document.addEventListener('keydown', e=>{
