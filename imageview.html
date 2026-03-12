@@ -62,11 +62,9 @@
 
     <script>
 
-        let PANNINGZOOM_VIEW_SCALE = 1.0;
+        const PANNINGZOOM_VIEW_SCALE_DEFAULT = 1.0 / (window.devicePixelRatio || 1);
+        let PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_DEFAULT;
         const RIGHT_DRAG_THRESHOLD = window.innerWidth/10; // 10 slots per screen width
-
-
-        PANNINGZOOM_VIEW_SCALE /= window.devicePixelRatio || 1; // adjust for high-DPI screens
 
 
 
@@ -130,10 +128,10 @@
             else 
                 PANNINGZOOM_VIEW_SCALE /= 1.1; // Zoom out
 
-            viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
             viewerElem.style.maxWidth = 'none';
             viewerElem.style.maxHeight = 'none';
             viewerElem.style.objectFit = 'initial';
+            viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
             viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
 
             updateViewbox(); // Update the viewbox after zooming
@@ -145,9 +143,9 @@
             console.log('wheel', e.deltaY);
             
             if(e.deltaY >= 100) {
-                ZoomInOut(false);
+                // ZoomInOut(false);
             } else if(e.deltaY <= -100) {
-                ZoomInOut(true);
+                // ZoomInOut(true);
             }
 
         }, { passive: false });
@@ -400,8 +398,8 @@
                 else currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
                 if(maxTranslateY < 0) currTranslateY = 0;
                 else currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
-                
                 viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
+
                 viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
                 startX = e.clientX;
                 startY = e.clientY;
@@ -435,6 +433,9 @@
         });
 
         function ExitZoomPanning() {
+            PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_DEFAULT;
+            viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
+
             // reset
             viewerElem.style.maxWidth = '';
             viewerElem.style.maxHeight = '';
