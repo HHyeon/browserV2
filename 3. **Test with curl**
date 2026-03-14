@@ -1,0 +1,6 @@
+curl -X POST http://localhost:3000/save-thumbnail \
+  -H "Content-Type: application/json" \
+  -d '{
+    "videoPath": "/path/to/video.mp4",
+    "thumbnailData": "base64_encoded_image_data"
+  }'
