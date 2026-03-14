@@ -30,11 +30,11 @@ let lastTouchX = 0;
 let lastTouchY = 0;
 
 // 2D Control Constants
-const MOUSE_SENSITIVITY = 0.002;
+const MOUSE_SENSITIVITY = 0.004;
 const TOUCH_SENSITIVITY = 0.003;
 const MOMENTUM_DAMPING = 0.8; // Reduced from 0.9 for 50% less inertia
-const MAX_PITCH = Math.PI * (45 / 180); // ~45 degrees - edge of VR180 content aligns with viewport edge
-const MAX_YAW = Math.PI * (45 / 180); // ~45 degrees - edge of VR180 content aligns with viewport edge
+const MAX_PITCH = Math.PI * (60 / 180); // ~60 degrees - edge of VR180 content aligns with viewport edge
+const MAX_YAW = Math.PI * (60 / 180); // ~60 degrees - edge of VR180 content aligns with viewport edge
 
 // Camera Zoom Constants
 const MIN_FOV = 25;          // Maximum zoom (approximately 3x)
@@ -950,19 +950,45 @@ function updateCameraRotation() {
 	camera2D.rotation.set(cameraRotation.pitch, cameraRotation.yaw, 0);
 }
 
+let mouselongpressedcheckTimer = null;
+
+function mouseLClickLongPressed() {
+	mouselongpressedcheckTimer = null;
+	console.log("long pressed !");
+}
+
+let isDraggingMaintained = false;
+
+function mouseLClickShortPressed() {
+	console.log("short pressed !");
+		
+	isDraggingMaintained = !isDraggingMaintained;
+
+	if (isDraggingMaintained) {
+		isDragging = true;
+		renderer.domElement.style.cursor = 'none';
+	} else {
+		isDragging = false;
+		renderer.domElement.style.cursor = '';
+	}
+
+}
+
 // Mouse Controls
 function onMouseDown(event) {
 	if(event.button == 0)
 	{
 		if (!is2DMode) return;
+		
+		// Hide controls when dragging starts
+		hide2DControlPanel();
+		mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
+
 		isDragging = true;
 		lastMouseX = event.clientX;
 		lastMouseY = event.clientY;
 		cameraVelocity.yaw = 0;
 		cameraVelocity.pitch = 0;
-		
-		// Hide controls when dragging starts
-		hide2DControlPanel();
 	}
 }
 
@@ -975,10 +1001,10 @@ function onMouseWheel(event) {
 	cameraZoom += direction * ZOOM_STEP;
 	cameraZoom = Math.max(1.0, Math.min(3.0, cameraZoom));
 
-	// console.log(`Camera Zoom: ${cameraZoom.toFixed(2)}`);
+	console.log(`Camera Zoom: ${cameraZoom.toFixed(2)}`);
 	
 	updateCameraFOV();
-	show2DControlPanel();
+	// show2DControlPanel();
 }
 
 function onMouseMove(event) {
@@ -987,8 +1013,8 @@ function onMouseMove(event) {
 	const deltaX = event.clientX - lastMouseX;
 	const deltaY = event.clientY - lastMouseY;
 	
-	cameraVelocity.yaw = deltaX * MOUSE_SENSITIVITY;
-	cameraVelocity.pitch = deltaY * MOUSE_SENSITIVITY;
+	cameraVelocity.yaw = (deltaX * MOUSE_SENSITIVITY);// / cameraZoom;
+	cameraVelocity.pitch = (deltaY * MOUSE_SENSITIVITY);// / cameraZoom;
 	
 	lastMouseX = event.clientX;
 	lastMouseY = event.clientY;
@@ -996,10 +1022,18 @@ function onMouseMove(event) {
 
 function onMouseUp(event) {
 	if (!is2DMode) return;
+
 	isDragging = false;
 	
+	if (mouselongpressedcheckTimer) {
+		clearTimeout(mouselongpressedcheckTimer);
+		mouselongpressedcheckTimer = null;
+		mouseLClickShortPressed();
+	}
+	
 	// Show controls when dragging ends
-	show2DControlPanel();
+	if(!isDragging)
+		show2DControlPanel();
 }
 
 // Touch Controls
@@ -1014,7 +1048,7 @@ function onTouchStart(event) {
 		cameraVelocity.pitch = 0;
 		
 		// Hide controls when dragging starts
-		hide2DControlPanel();
+		// hide2DControlPanel();
 	}
 }
 
@@ -1141,6 +1175,8 @@ function init2DControlPanel() {
 
 function show2DControlPanel() {
 	if (!is2DMode || !controlPanel) return;
+
+	console.log("Showing 2D control panel");
 	
 	clearTimeout(controlPanelTimeout);
 	controlPanel.classList.add('visible');
@@ -1151,6 +1187,8 @@ function show2DControlPanel() {
 
 function hide2DControlPanel() {
 	if (!controlPanel) return;
+
+	console.log("Hiding 2D control panel");
 	
 	clearTimeout(controlPanelTimeout);
 	controlPanel.classList.remove('visible');
@@ -1158,7 +1196,7 @@ function hide2DControlPanel() {
 }
 
 function onCanvasMouseMove() {
-	if (is2DMode && !isDragging) {
+	if (is2DMode && !isDragging && !isDraggingMaintained) {
 		show2DControlPanel();
 	}
 }
