@@ -48,9 +48,9 @@
 
         </style>
     </head>
-    <body oncontextmenu="return false">
+    <body draggable="false" oncontextmenu="return false">
 
-        <div class="container">
+        <div draggable="false" class="container">
             <video id="player" style="object-fit: contain;" buffered autoplay></video>
 
             <h1 id="label1"></h1>
@@ -222,57 +222,46 @@
 
             let setplaytime = false;
             let videozoomfactor = 1.00;
-            let videozoomposY = 0;
+            let videozoomenabled = false;
+            const videozoomstep = 1.05;
 
             window.addEventListener("wheel", function(e) {
                 if(e.deltaY > 0)
                 {
-                    if(!e.shiftKey)
+                    if(videozoomfactor > 1.0)
                     {
-                        if(videozoomfactor > 1.0)
-                        {
-                            videozoomfactor -= 0.2;
-                        }
-
-                        videozoomfactor = Math.round(videozoomfactor * 10) / 10;
-
-                        setLabelText(`zoom:  ${videozoomfactor}`);
+                        videozoomfactor /= videozoomstep;
                     }
-                    else
-                    {
-                        if(videozoomfactor > 1.0) videozoomposY -= 100;
+                    else {
+                        videozoomfactor = 1.0;
+                        videozoomenabled = false;
+                        
+                        videozoompanning_videopos.x = 0;
+                        videozoompanning_videopos.y = 0;
+                        player.style.transform = `translate(${videozoompanning_videopos.x}px, ${videozoompanning_videopos.y}px)`;
                     }
-                    
-                    if(videozoomfactor == 1.0) videozoomposY = 0;
+                    videozoomfactor = videozoomfactor.toFixed(1);
+                    console.log(`videozoomfactor - ${videozoomfactor}`);
 
-                    player.style.transform = `translate(0px,${videozoomposY}px) scale(${videozoomfactor})`;
-
+                    setLabelText(`zoom:  ${videozoomfactor}`);
+                    player.style.scale = videozoomfactor;
                 }
                 else
                 {
-                    if(!e.shiftKey)
+                    if(videozoomfactor < 3.0)
                     {
-                        if(videozoomfactor < 3.0)
-                        {
-                            videozoomfactor += 0.2;
-                        }
-                        else
-                        {
-                            videozoomposY = 0;
-                        }
-                        videozoomfactor = Math.round(videozoomfactor * 10) / 10;
-
-                        setLabelText(`zoom:  ${videozoomfactor}`);
+                        videozoomfactor *= videozoomstep;
+                        videozoomenabled = true;
                     }
-                    else
-                    {
-                        if(videozoomfactor > 1.0) videozoomposY += 100;
+                    else {
+                        videozoomfactor = 3.0;
                     }
 
-                    if(videozoomfactor == 1.0) videozoomposY = 0;
+                    videozoomfactor = videozoomfactor.toFixed(1);
+                    console.log(`videozoomfactor - ${videozoomfactor}`);
 
-                    player.style.transform = `translate(0px,${videozoomposY}px) scale(${videozoomfactor})`;
-
+                    setLabelText(`zoom:  ${videozoomfactor}`);
+                    player.style.scale = videozoomfactor;
                 }
             });
 
@@ -620,10 +609,16 @@
 
                 switch(param.button) {
                     case 0:
-                        console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
 
-                        if(leftcancelnextclick) leftcancelnextclick = false;
-                        else pauseplay();
+                        if(videozoomenabled) {
+                        }
+                        else {
+                            console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
+
+                            if(leftcancelnextclick) leftcancelnextclick = false;
+                            else pauseplay();
+                        }
+
                         break;
                     case 1:
 
@@ -637,19 +632,40 @@
                 }
             });
 
+            let videozoompanning_mousepos_start = {x:0, y:0};
+            let videozoompanning_videopos = {x:0, y:0};
+            let videozoompanning_dragging = false;
+
             document.addEventListener("mousedown", (param) => {
 
                 switch(param.button) {
                     case 0: // left
-                        leftmousedowned = true;
-                        leftmouse_movestarted = true;
-                        leftmousedownpos = param.x;
-                        seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
+
+                        if(videozoomenabled) {
+                            videozoompanning_dragging = true;
+                            videozoompanning_mousepos_start = {x:param.x, y:param.y};
+                            console.log(`videozoompanning_mousepos_start - ${videozoompanning_mousepos_start.x}, ${videozoompanning_mousepos_start.y}`);
+                        }
+                        else {
+                            leftmousedowned = true;
+                            leftmouse_movestarted = true;
+                            leftmousedownpos = param.x;
+                            seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
+                        }
+                    
                         break;
                     
                     case 1: // middle
                         player.playbackRate = 1.0;
                         setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
+
+                        videozoomfactor = 1.0;
+                        videozoomenabled = false;
+                        videozoompanning_videopos.x = 0;
+                        videozoompanning_videopos.y = 0;
+                        player.style.transform = `translate(${videozoompanning_videopos.x}px, ${videozoompanning_videopos.y}px)`;
+                        player.style.scale = videozoomfactor;
+
                         break;
                     
                     case 2: // right
@@ -666,11 +682,18 @@
                 switch(param.button) {
                     case 0: // left
                         {
-                            leftmousedowned = false;                        
-                            if(!pastpausedstate) {
-                                player.play();
+                            videozoompanning_dragging = false;
+
+                            if(videozoomenabled) {
+
                             }
-                            clearInterval(seeking_labelsetting_handler);
+                            else {
+                                leftmousedowned = false;                        
+                                if(!pastpausedstate) {
+                                    player.play();
+                                }
+                                clearInterval(seeking_labelsetting_handler);
+                            }
                         }
                         break;
                     
@@ -739,6 +762,30 @@
             let speed_currentpush;
 
             document.addEventListener("mousemove", (param) => {
+
+                if(videozoompanning_dragging) {
+
+                    const deltaX = (param.x - videozoompanning_mousepos_start.x) / videozoomfactor;
+                    const deltaY = (param.y - videozoompanning_mousepos_start.y) / videozoomfactor;
+
+                    videozoompanning_videopos.x += deltaX;
+                    videozoompanning_videopos.y += deltaY;
+
+                    const maxTranslateX = player.videoWidth/2 - ((window.innerWidth)/2/(videozoomfactor));
+                    const maxTranslateY = player.videoHeight/2 - ((window.innerHeight)/2/(videozoomfactor));
+
+                    console.log(`vidpos - ${videozoompanning_videopos.x.toFixed(2)}, ${videozoompanning_videopos.y.toFixed(2)}, ` +
+                                 `maxTranslate - ${maxTranslateX.toFixed(2)}, ${maxTranslateY.toFixed(2)}`);
+
+                    // if(maxTranslateX < 0) videozoompanning_videopos.x = 0;
+                    // else videozoompanning_videopos.x = Math.max(-maxTranslateX, Math.min(maxTranslateX, videozoompanning_videopos.x));
+                    // if(maxTranslateY < 0) videozoompanning_videopos.y = 0;
+                    // else videozoompanning_videopos.y = Math.max(-maxTranslateY, Math.min(maxTranslateY, videozoompanning_videopos.y));
+                    player.style.transform = `translate(${videozoompanning_videopos.x}px, ${videozoompanning_videopos.y}px)`;
+
+                    videozoompanning_mousepos_start.x = param.x;
+                    videozoompanning_mousepos_start.y = param.y;
+                }
 
                 if(leftmousedowned) {
                     // console.log("mousemove !");
