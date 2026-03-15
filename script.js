@@ -1,4 +1,3 @@
-
 const urlParams = (new URL(window.location.href)).searchParams;
 
 
@@ -51,71 +50,6 @@ async function dirseek(param) {
     }
 }
 
-
-let DBSession;
-
-function indexedDB_init() {
-    const request = window.indexedDB.open('customed-web-browser');
-    
-    request.onupgradeneeded = (e) => {
-        console.log('onupgradeneeded');
-        let result = e.target.result.createObjectStore('thumbnailstore', {keyPath: 'filename'});
-        // result.createIndex('filename', 'filename', {unique: false});
-        // result.createIndex('filedata', 'filedata', {unique: false});
-    }
-
-    request.onsuccess = (e) => {
-        DBSession = request.result;
-        
-        console.log('startup proceed after indexedDB init');
-        startup();
-    }
-    
-    request.onerror = (e) => {
-        console.error('indexedDB Error');
-    }
-}
-
-function indexedDB_addvalue(filename, filedata, videocurrentpos, evt) {
-    const transaction = DBSession.transaction(['thumbnailstore'], 'readwrite');
-    const store = transaction.objectStore('thumbnailstore');
-    
-    const item = {
-        filename: `${filename}`,
-        filedata: `${filedata}`,
-        position: `${videocurrentpos}`
-    }
-    
-    const resp = store.put(item);
-    
-    resp.onsuccess = () => {
-        evt(true);
-    }
-
-    resp.onerror = () => {
-        evt(false);
-        console.error("indexedDB_addvalue Failed");
-    }
-}
-
-async function indexedDB_get(filename) {
-    const transaction = DBSession.transaction(['thumbnailstore'], 'readwrite');
-    const store = transaction.objectStore('thumbnailstore');
-
-    return new Promise( (resolve) => {
-        const resp = store.get(filename);
-    
-        resp.onsuccess = () => {
-            resolve(resp.result);
-        }
-    
-        resp.onerror = () => {
-            console.error("indexedDB_get Failed");
-            resolve(null);    
-        }
-    });
-    
-}
 
 let lastVisibleStart = 0;  // 이전 렌더링의 시작 인덱스
 let lastVisibleEnd = 0;    // 이전 렌더링의 끝 인덱스
@@ -412,7 +346,7 @@ async function processVideoLoadQueue() {
         if (!videoElement || !videoElement.parentElement) {
             // 요소가 DOM에서 제거된 경우 스킵
             activeVideoLoads--;
-            processVideoLoadQueue(); // 다음 항목 처리
+            processVideoLoadQueue();
             return;
         }
 
@@ -459,55 +393,59 @@ async function processVideoLoadQueue() {
 
                 console.log(`[Cache] Frame extracted: ${videoInfo.fname} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
 
-                // 🔑 IndexedDB 저장: 원본 경로 키로 저장 (중복 방지)
-                await new Promise(resolve => {
-                    indexedDB_addvalue(cacheKey, imagedatabase64, targetvidtime, (success) => {
-                        if (!success) {
-                            console.error(`[Cache] Failed to save: ${cacheKey}`);
-                            activeVideoLoads--;
-                            clearTimeout(timeoutId);
-                            clearInterval(removalCheckInterval);
-                            processVideoLoadQueue();
-                            return;
-                        }
-
-                        console.log(`[Cache] Saved: ${cacheKey}`);
-                        
-                        // 🔑 makeitem_Store 업데이트: fname 키로 접근
-                        if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
-                            makeitem_Store[videoInfo.fname].need_video_load = false;
-                            makeitem_Store[videoInfo.fname].item_img = true;
-                            makeitem_Store[videoInfo.fname].imgpath = imagedatabase64;
-                            console.log(`[Cache] Updated makeitem_Store for: ${videoInfo.fname}`);
-                        }
-                        
-                        // 🔑 DOM 업데이트: 비디오 요소를 이미지로 교체
-                        if (videoElement.parentElement) {
-                            // 비디오 요소 제거
-                            videoElement.pause();
-                            videoElement.removeAttribute('src');
-                            videoElement.load();
-                            
-                            // 같은 위치에 이미지 추가
-                            const imgElement = document.createElement('img');
-                            imgElement.src = imagedatabase64;
-                            imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover;';
-                            imgElement.alt = 'Cached thumbnail';
-                            
-                            videoElement.parentElement.insertBefore(imgElement, videoElement);
-                            videoElement.remove();
-                            console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
-                        }
-                        
-                        resolve();
-                    });
+                // 🔑 서버에 썸네일 저장
+                const response = await fetch('/save-thumbnail', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        videoPath: videoInfo.fname,
+                        thumbnailData: imagedatabase64
+                    })
                 });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // 서버에서 저장된 경로를 makeitem_Store에 저장
+                    makeitem_Store[videoInfo.fname].imgpath = result.thumbnailPath;
+                } else {
+                    console.error(`[Cache] Failed to save thumbnail for ${videoInfo.fname}`);
+                }
+
+                // 🔑 makeitem_Store 업데이트: fname 키로 접근
+                if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
+                    makeitem_Store[videoInfo.fname].need_video_load = false;
+                    makeitem_Store[videoInfo.fname].item_img = true;
+                    makeitem_Store[videoInfo.fname].imgpath = result.thumbnailPath;
+                    console.log(`[Cache] Updated makeitem_Store for: ${videoInfo.fname}`);
+                }
+                
+                // 🔑 DOM 업데이트: 비디오 요소를 이미지로 교체
+                if (videoElement.parentElement) {
+                    // 비디오 요소 제거
+                    videoElement.pause();
+                    videoElement.removeAttribute('src');
+                    videoElement.load();
+                    
+                    // 같은 위치에 이미지 추가
+                    const imgElement = document.createElement('img');
+                    imgElement.src = result.thumbnailPath;
+                    imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover;';
+                    imgElement.alt = 'Cached thumbnail';
+                    
+                    videoElement.parentElement.insertBefore(imgElement, videoElement);
+                    videoElement.remove();
+                    console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
+                }
+                
+                activeVideoLoads--;
+                processVideoLoadQueue(); // 다음 항목 처리
             } catch (ex) {
                 console.error(`[VideoLoad] Error processing ${videoInfo.fname || 'unknown'}`, ex);
             } finally {
                 activeVideoLoads--;
-                clearTimeout(timeoutId);
-                clearInterval(removalCheckInterval);
                 processVideoLoadQueue(); // 다음 항목 처리
             }
         };
