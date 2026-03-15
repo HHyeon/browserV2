@@ -380,8 +380,8 @@ async function processVideoLoadQueue() {
             
             try {
                 const imagedatabase64 = video_to_image_base64(videoElement);
-                const targetvidtime = videoElement.currentTime;
-                const cacheKey = videoInfo.cacheKey;  // 🔑 원본 경로 사용
+                // const targetvidtime = videoElement.currentTime;
+                // const cacheKey = videoInfo.cacheKey;  // 🔑 원본 경로 사용
 
                 // 🔑 Base64 유효성 검증
                 if (!imagedatabase64 || imagedatabase64.length < 100) {
@@ -394,7 +394,7 @@ async function processVideoLoadQueue() {
                 console.log(`[Cache] Frame extracted: ${videoInfo.fname} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
 
                 // 🔑 서버에 썸네일 저장
-                const response = await fetch('/save-thumbnail', {
+                const response = await fetch('http://192.168.50.1:3001/save-thumbnail', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -431,9 +431,12 @@ async function processVideoLoadQueue() {
                     
                     // 같은 위치에 이미지 추가
                     const imgElement = document.createElement('img');
-                    imgElement.src = result.thumbnailPath;
+                    imgElement.src = document.location.origin + document.location.pathname + result.thumbnailPath;
+                    console.log(`[Cache] Setting image src to: ${videoInfo.fname}`);
                     imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover;';
                     imgElement.alt = 'Cached thumbnail';
+                    
+                    makeitem_Store[videoInfo.fname].imgpath = imgElement.src; // ✅ makeitem_Store에 최종 이미지 경로 저장
                     
                     videoElement.parentElement.insertBefore(imgElement, videoElement);
                     videoElement.remove();
@@ -613,6 +616,21 @@ function randChoice(arr) {
     return arr[Math.floor(Math.random() * arr.length)]
 }
 
+async function checkThumbnail(videoFile) {
+
+    videoFile += '.jpg';
+
+    console.log(`[Cache] Checking thumbnail for: ${videoFile}`);
+
+    const res = await fetch(
+        `http://192.168.50.1:3001/thumbnail-exists?videoPath=${encodeURIComponent(videoFile)}`
+    );
+
+    const data = await res.json();
+
+    return data;
+}
+
 let makeitem_Store = {};
 
 async function makeitem(w,h,x,y,fname,text,force=false) {
@@ -693,17 +711,19 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                     else
                     {
                         // 🔑 원본 경로로 캐시 조회 (일관성)
-                        const get_result = await indexedDB_get(cacheKey);
-                        if(get_result != undefined) // valid cache
-                        {
-                            console.log(`[Cache] Hit: ${fname}`);
+
+                        // console.log(`vidpath - ${vidpath}`);
+
+                        const result = await checkThumbnail(vidpath.substring(vidpath.lastIndexOf('/') + 1));
+
+                        if(result.exists) {
+                            let fnamethumbnailed = fname + '.jpg';
                             item_img = true;
-                            imgpath = get_result['filedata'];
+                            imgpath = 'thumbnails/' + fnamethumbnailed;
+                            console.log(`[Cache] Checking thumbnail at: ${imgpath}`);
                         }
-                        else // need to extract frame
-                        {
+                        else {
                             need_video_load = true;
-                            console.log(`[Cache] Miss: ${fname} - will load`);
                         }
                     }
                 }
@@ -736,6 +756,8 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         need_video_load = makeitem_Store[fname].need_video_load;
         let hasMp4 = makeitem_Store[fname].hasMp4 || false;
         hasHighImageRatio = makeitem_Store[fname].hasHighImageRatio || false;
+
+        console.log(``)
 
         console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}`);
     }
@@ -1064,7 +1086,8 @@ async function startup() {
 
 document.addEventListener("DOMContentLoaded", () => {
     // console.log("DOMContentLoaded");
-    indexedDB_init();
+    // indexedDB_init();
+    startup();
 }, false)
 
 function setordertype(type)
