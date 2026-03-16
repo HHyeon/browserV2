@@ -1,3 +1,9 @@
+
+
+const THUMBNAIL_CACHING_SERVER_URL_PORT = '3001'; // 🔑 썸네일 캐싱 서버 URL (Node.js 서버)
+
+
+
 const urlParams = (new URL(window.location.href)).searchParams;
 
 
@@ -394,7 +400,7 @@ async function processVideoLoadQueue() {
                 console.log(`[Cache] Frame extracted: ${videoInfo.fname} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
 
                 // 🔑 서버에 썸네일 저장
-                const response = await fetch('http://192.168.50.1:3001/save-thumbnail', {
+                const response = await fetch(`${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/save-thumbnail`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -623,7 +629,7 @@ async function checkThumbnail(videoFile) {
     console.log(`[Cache] Checking thumbnail for: ${videoFile}`);
 
     const res = await fetch(
-        `http://192.168.50.1:3001/thumbnail-exists?videoPath=${encodeURIComponent(videoFile)}`
+        `${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/thumbnail-exists?videoPath=${encodeURIComponent(videoFile)}`
     );
 
     const data = await res.json();

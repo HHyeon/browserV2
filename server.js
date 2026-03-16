@@ -4,7 +4,9 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const app = express();
+
 const port = 3001;
+const listenaddress = '0.0.0.0';
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -41,6 +43,8 @@ app.post('/save-thumbnail', (req, res) => {
 
         fs.writeFileSync(thumbnailPath, buffer);
 
+        console.log(`[Thumbnail Saved] ${videoPath} -> ${thumbnailFileName}`);
+
         res.json({
             success: true,
             thumbnailPath: `/thumbnails/${thumbnailFileName}`
@@ -67,6 +71,8 @@ app.get('/thumbnail-exists', (req, res) => {
 
     const exists = fs.existsSync(thumbnailPath);
 
+    console.log(`[Thumbnail Check] ${videoPath} -> ${exists ? 'Exists' : 'Not Found'}`);
+
     res.json({
         exists: exists,
         thumbnailPath: `/thumbnails/${thumbnailFileName}`
@@ -74,7 +80,6 @@ app.get('/thumbnail-exists', (req, res) => {
 });
 
 // Start the server
-app.listen(port, '0.0.0.0', () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log('Use POST /save-thumbnail to upload thumbnails');
+app.listen(port, listenaddress, () => {
+    console.log(`Server running at http://${listenaddress}:${port}`);
 });
