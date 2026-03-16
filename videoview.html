@@ -777,10 +777,11 @@
                     console.log(`vidpos - ${videozoompanning_videopos.x.toFixed(2)}, ${videozoompanning_videopos.y.toFixed(2)}, ` +
                                  `maxTranslate - ${maxTranslateX.toFixed(2)}, ${maxTranslateY.toFixed(2)}`);
 
-                    // if(maxTranslateX < 0) videozoompanning_videopos.x = 0;
-                    // else videozoompanning_videopos.x = Math.max(-maxTranslateX, Math.min(maxTranslateX, videozoompanning_videopos.x));
-                    // if(maxTranslateY < 0) videozoompanning_videopos.y = 0;
-                    // else videozoompanning_videopos.y = Math.max(-maxTranslateY, Math.min(maxTranslateY, videozoompanning_videopos.y));
+                    if(maxTranslateX < 0) videozoompanning_videopos.x = 0;
+                    else videozoompanning_videopos.x = Math.max(-maxTranslateX, Math.min(maxTranslateX, videozoompanning_videopos.x));
+                    if(maxTranslateY < 0) videozoompanning_videopos.y = 0;
+                    else videozoompanning_videopos.y = Math.max(-maxTranslateY, Math.min(maxTranslateY, videozoompanning_videopos.y));
+                    
                     player.style.transform = `translate(${videozoompanning_videopos.x}px, ${videozoompanning_videopos.y}px)`;
 
                     videozoompanning_mousepos_start.x = param.x;
