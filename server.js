@@ -34,7 +34,7 @@ app.post('/save-thumbnail', (req, res) => {
 
         // Extract video name without extension
         const videoName = path.basename(videoPath);
-        const thumbnailFileName = `${videoName}.jpg`;
+        const thumbnailFileName = `${decodeURIComponent(videoName)}.jpg`;
         const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
 
         // Convert Base64 data to binary and write to file
@@ -66,7 +66,7 @@ app.get('/thumbnail-exists', (req, res) => {
     }
 
     const videoName = path.basename(videoPath, path.extname(videoPath));
-    const thumbnailFileName = `${videoName}.jpg`;
+    const thumbnailFileName = `${decodeURIComponent(videoName)}.jpg`;
     const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
 
     const exists = fs.existsSync(thumbnailPath);

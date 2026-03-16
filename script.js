@@ -406,7 +406,7 @@ async function processVideoLoadQueue() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        videoPath: videoInfo.fname,
+                        videoPath: videoInfo.fname.replace(' ', '_'), // 공백이 있는 경우 '_'로 대체하여 저장
                         thumbnailData: imagedatabase64
                     })
                 });
@@ -685,7 +685,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         
                 let totalFiles = jsondata["data"].length;
                 let imageRatio = totalFiles > 0 ? imageCount / totalFiles : 0;
-                hasHighImageRatio = imageRatio >= 0.6;
+                hasHighImageRatio = imageRatio >= 0.9;
         
                 if(dirbelowimgs.length > 0) {
                     item_img = true;
@@ -720,12 +720,14 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
 
                         // console.log(`vidpath - ${vidpath}`);
 
-                        const result = await checkThumbnail(vidpath.substring(vidpath.lastIndexOf('/') + 1));
+                        let fbasename = vidpath.substring(vidpath.lastIndexOf('/') + 1);
+
+                        const result = await checkThumbnail(fbasename.replace(' ', '_')); // 공백이 있는 경우 '_'로 대체하여 체크
 
                         if(result.exists) {
                             let fnamethumbnailed = fname + '.jpg';
                             item_img = true;
-                            imgpath = 'thumbnails/' + fnamethumbnailed;
+                            imgpath = 'thumbnails/' + encodeURIComponent(fnamethumbnailed);
                             console.log(`[Cache] Checking thumbnail at: ${imgpath}`);
                         }
                         else {
