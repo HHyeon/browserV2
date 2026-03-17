@@ -352,11 +352,6 @@
 
         function zoomPanning_move(mX, mY) {
             if(zoomPanningStayed) {
-                if(mouselongpressedcheckTimer != null) {
-                    clearTimeout(mouselongpressedcheckTimer);
-                    mouselongpressedcheckTimer = null;
-                }
-
                 const deltaX = (mX - startX) / PANNINGZOOM_VIEW_SCALE;
                 const deltaY = (mY - startY) / PANNINGZOOM_VIEW_SCALE;
                 currTranslateX += deltaX;
@@ -426,6 +421,12 @@
         document.addEventListener('mousemove', e => {
 
             if(MouseL_Dragging) {
+                
+                if(mouselongpressedcheckTimer != null) {
+                    clearTimeout(mouselongpressedcheckTimer);
+                    mouselongpressedcheckTimer = null;
+                }
+                
                 zoomPanning_move(e.clientX, e.clientY);
             }
             
