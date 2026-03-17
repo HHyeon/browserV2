@@ -14,9 +14,9 @@
             overflow:hidden;
         }
         img {
-            max-width:100%;
-            max-height:100%;
-            object-fit:contain;
+            max-width:none;
+            max-height:none;
+            object-fit:none;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
@@ -62,10 +62,10 @@
 
     <script>
 
-        const PANNINGZOOM_VIEW_SCALE_DEFAULT = 1.0 / (window.devicePixelRatio || 1);
+        let PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = 0;
+        let PANNINGZOOM_VIEW_SCALE_DEFAULT = 0;
         let PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_DEFAULT;
         const RIGHT_DRAG_THRESHOLD = window.innerWidth/10; // 10 slots per screen width
-
 
 
         async function dirseek(param) {
@@ -121,31 +121,49 @@
         //     updateViewbox();
         // });
 
-        function ZoomInOut(zoom) {
-            zoomPanningStayed = true; // Activate zoomPanningStayed mode
-            if(zoom)
+        function ZoomInOut(zoom, mX, mY) {
+            let exitzoom = false;
+
+            if(zoom) {
                 PANNINGZOOM_VIEW_SCALE *= 1.1; // Zoom in
-            else 
+
+                zoomPanningStayed = true;
+
+                if(PANNINGZOOM_VIEW_SCALE > PANNINGZOOM_VIEW_SCALE_PIXCELMATCH * 1.5) {
+                    PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH * 1.5;
+                }
+            }
+            else  {
                 PANNINGZOOM_VIEW_SCALE /= 1.1; // Zoom out
+                if(PANNINGZOOM_VIEW_SCALE < PANNINGZOOM_VIEW_SCALE_DEFAULT) {
+                    PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_DEFAULT;
+                    exitzoom = true;
+                }
+            }
 
-            viewerElem.style.maxWidth = 'none';
-            viewerElem.style.maxHeight = 'none';
-            viewerElem.style.objectFit = 'initial';
-            viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-            viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
+            if(exitzoom) {
+                ExitZoomPanning();
+                console.log(`exit zoompanning !`);
+            }
+            else {
+                // zoomPanning_Update();
 
-            updateViewbox(); // Update the viewbox after zooming
+                zoomPanning_start(mX,mY);
+            }
+
         }
 
         document.addEventListener('wheel', e => {
             e.preventDefault();
 
-            console.log('wheel', e.deltaY);
+            const wheelamount = e.deltaY * window.devicePixelRatio;
+
+            // console.log(`wheelamount - ${wheelamount}`);
             
-            if(e.deltaY >= 100) {
-                // ZoomInOut(false);
-            } else if(e.deltaY <= -100) {
-                // ZoomInOut(true);
+            if(wheelamount >= 100) {
+                ZoomInOut(false, e.clientX, e.clientY);
+            } else if(wheelamount <= -100) {
+                ZoomInOut(true, e.clientX, e.clientY);
             }
 
         }, { passive: false });
@@ -185,11 +203,9 @@
 
             if(img.complete) {
                 onImageLoaded();
-                updateViewbox();   // ensure overlay after navigation
             } else {
                 img.onload = () => {
                     onImageLoaded();
-                    updateViewbox();
                 };
             }
 
@@ -215,13 +231,17 @@
 
         function onImageLoaded() {
             console.log(`image : ${viewerElem.naturalWidth}, ${viewerElem.naturalHeight}` + 
-                         ` window: ${window.innerWidth}, ${window.innerHeight}` + 
-                         ` viewport: ${viewerElem.clientWidth}, ${viewerElem.clientHeight}`
-                        );
+                         ` window: ${window.innerWidth}, ${window.innerHeight}`);
 
             zoom_moveing_scale_x = viewerElem.naturalWidth / window.innerWidth;
             zoom_moveing_scale_y = viewerElem.naturalHeight / window.innerHeight;
 
+            PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = 1 / window.devicePixelRatio;
+            PANNINGZOOM_VIEW_SCALE_DEFAULT = Math.min(window.innerWidth/viewerElem.naturalWidth, window.innerHeight/viewerElem.naturalHeight);
+
+            ExitZoomPanning();
+
+            console.log(`default viewscale ${PANNINGZOOM_VIEW_SCALE}`);
             console.log(`moveing scale: ${zoom_moveing_scale_x}, ${zoom_moveing_scale_y}`);
 
             updateViewbox();
@@ -244,7 +264,7 @@
 
         // Update overlay on window resize
         window.addEventListener('resize', () => {
-            if (!MouseL_Dragging) updateViewbox(); // only if not zooming
+            onImageLoaded();
         });
 
         let rightDragStartX = 0;
@@ -283,6 +303,77 @@
             }
 
         }
+
+
+
+        function zoomPanning_Update() {
+            console.log(`PANNINGZOOM_VIEW_SCALE - ${PANNINGZOOM_VIEW_SCALE}`);
+            
+            const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
+            const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
+            
+            if(maxTranslateX < 0) currTranslateX = 0;
+            else currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
+            if(maxTranslateY < 0) currTranslateY = 0;
+            else currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
+
+            viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
+            viewerElem.style.maxWidth = 'none';
+            viewerElem.style.maxHeight = 'none';
+            viewerElem.style.objectFit = 'none';
+            viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
+
+            zoomBoxview.style.visibility = 'visible';
+            updateViewbox();
+        }
+
+        function zoomPanning_start(mX, mY) {
+            let mousexinmgs_beforezoom = mX - viewerElem.getBoundingClientRect().left;
+            let mouseyinmgs_beforezoom = mY - viewerElem.getBoundingClientRect().top;
+            console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+
+            let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.getBoundingClientRect().width) * viewerElem.naturalWidth;
+            let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.getBoundingClientRect().height) * viewerElem.naturalHeight;
+            console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
+            let mouseXfromcenter = mX - window.innerWidth/2;
+            let mouseYfromcenter = mY - window.innerHeight/2;
+            console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+            
+            mousexinmgs_realimg -= mouseXfromcenter / PANNINGZOOM_VIEW_SCALE;
+            mouseyinmgs_realimg -= mouseYfromcenter / PANNINGZOOM_VIEW_SCALE;
+
+            currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
+            currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
+            startX = mX;
+            startY = mY;
+
+            zoomPanning_Update();
+        }
+
+        function zoomPanning_move(mX, mY) {
+            if(zoomPanningStayed) {
+                if(mouselongpressedcheckTimer != null) {
+                    clearTimeout(mouselongpressedcheckTimer);
+                    mouselongpressedcheckTimer = null;
+                }
+
+                const deltaX = (mX - startX) / PANNINGZOOM_VIEW_SCALE;
+                const deltaY = (mY - startY) / PANNINGZOOM_VIEW_SCALE;
+                currTranslateX += deltaX;
+                currTranslateY += deltaY;
+            }
+            else {
+                const deltaX = (mX - startX) * zoom_moveing_scale_x;
+                const deltaY = (mY - startY) * zoom_moveing_scale_y;
+                currTranslateX -= deltaX;
+                currTranslateY -= deltaY;
+            }
+            startX = mX;
+            startY = mY;
+            
+            zoomPanning_Update();
+        }
+                    
 
         document.addEventListener('mousedown', e => {
             e.stopPropagation();
@@ -323,92 +414,19 @@
                 }
                 else
                 {
-                    let mousexinmgs_beforezoom = e.clientX - viewerElem.getBoundingClientRect().left;
-                    let mouseyinmgs_beforezoom = e.clientY - viewerElem.getBoundingClientRect().top;
-                    console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
-
-                    if(mousexinmgs_beforezoom < 0 || mousexinmgs_beforezoom > viewerElem.clientWidth ||
-                    mouseyinmgs_beforezoom < 0 || mouseyinmgs_beforezoom > viewerElem.clientHeight) {
-                        console.log('mouse outside image, ignoring zoom');
-                        MouseL_Dragging = false;
-                    }
-                    else
-                    {
-                        let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.clientWidth) * viewerElem.naturalWidth;
-                        let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.clientHeight) * viewerElem.naturalHeight;
-                        console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
-                        let mouseXfromcenter = e.clientX - window.innerWidth/2;
-                        let mouseYfromcenter = e.clientY - window.innerHeight/2;
-                        console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
-                        mousexinmgs_realimg -= mouseXfromcenter / PANNINGZOOM_VIEW_SCALE;
-                        mouseyinmgs_realimg -= mouseYfromcenter / PANNINGZOOM_VIEW_SCALE;
-                        currTranslateX = viewerElem.naturalWidth/2 - mousexinmgs_realimg;
-                        currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
-                        startX = e.clientX;
-                        startY = e.clientY;
-                        
-                        const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
-                        const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
-                        if(maxTranslateX < 0) currTranslateX = 0;
-                        else currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
-                        if(maxTranslateY < 0) currTranslateY = 0;
-                        else currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
-
-                        viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-                        viewerElem.style.maxWidth = 'none';
-                        viewerElem.style.maxHeight = 'none';
-                        viewerElem.style.objectFit = 'initial';
-                        viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
-                        
-                        viewerElem.style.cursor = 'none';
-                        
-                        zoomBoxview.style.visibility = 'visible';
-                        updateViewbox();
-                        
-                    }
+                    PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH;
+                    console.log(`1:1 scale: ${PANNINGZOOM_VIEW_SCALE}`);
+                    zoomPanning_start(e.clientX, e.clientY);
+                    viewerElem.style.cursor = 'none';
                 }
 
             }
         });
 
         document.addEventListener('mousemove', e => {
+
             if(MouseL_Dragging) {
-                
-                if(zoomPanningStayed) {
-                    if(mouselongpressedcheckTimer != null) {
-                        clearTimeout(mouselongpressedcheckTimer);
-                        mouselongpressedcheckTimer = null;
-                    }
-
-                    const deltaX = (e.clientX - startX) / PANNINGZOOM_VIEW_SCALE;
-                    const deltaY = (e.clientY - startY) / PANNINGZOOM_VIEW_SCALE;
-                    currTranslateX += deltaX;
-                    currTranslateY += deltaY;
-                }
-                else {
-                    const deltaX = (e.clientX - startX) * zoom_moveing_scale_x;
-                    const deltaY = (e.clientY - startY) * zoom_moveing_scale_y;
-                    currTranslateX -= deltaX;
-                    currTranslateY -= deltaY;
-                }
-
-                const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
-                const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
-                if(maxTranslateX < 0) currTranslateX = 0;
-                else currTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currTranslateX));
-                if(maxTranslateY < 0) currTranslateY = 0;
-                else currTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currTranslateY));
-                viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-
-                viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
-                startX = e.clientX;
-                startY = e.clientY;
-
-                updateViewbox();
-            }
-
-            if(zoomPanningStayed) {
-
+                zoomPanning_move(e.clientX, e.clientY);
             }
             
             if(isRightDragging) {
@@ -433,15 +451,16 @@
         });
 
         function ExitZoomPanning() {
+            zoomPanningStayed = false;
             PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_DEFAULT;
-            viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
 
+            currTranslateX = currTranslateY = 0;
             // reset
             viewerElem.style.maxWidth = '';
             viewerElem.style.maxHeight = '';
-            viewerElem.style.objectFit = 'contain';
+            viewerElem.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
             viewerElem.style.transform = '';
-            viewerElem.style.scale = '';
+            viewerElem.style.scale = PANNINGZOOM_VIEW_SCALE;
             MouseL_Dragging = false;
 
             viewerElem.style.cursor = '';
