@@ -295,14 +295,9 @@
             
             let startX = 0, startY = 0;
             let currTranslateX = 0, currTranslateY = 0;
-            let zoom_moveing_scale_x = 1;
-            let zoom_moveing_scale_y = 1;
 
             function ExitZoomPanning() {
 
-                zoom_moveing_scale_x = player.videoWidth / window.innerWidth;
-                zoom_moveing_scale_y = player.videoHeight / window.innerHeight;
-                
                 PANNINGZOOM_VIEW_SCALE_DEFAULT = PANNINGZOOM_VIEW_SCALE = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
                 PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = PANNINGZOOM_VIEW_SCALE;
                 zoomPanningStayed = false;
@@ -355,14 +350,14 @@
             function zoomPanning_start(mX, mY) {
                 let mousexinmgs_beforezoom = mX - player.getBoundingClientRect().left;
                 let mouseyinmgs_beforezoom = mY - player.getBoundingClientRect().top;
-                console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+                // console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
 
                 let mousexinmgs_realimg = (mousexinmgs_beforezoom / player.getBoundingClientRect().width) * player.videoWidth;
                 let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / player.getBoundingClientRect().height) * player.videoHeight;
-                console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
+                // console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
                 let mouseXfromcenter = mX - window.innerWidth/2;
                 let mouseYfromcenter = mY - window.innerHeight/2;
-                console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+                // console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
                 
                 mousexinmgs_realimg -= mouseXfromcenter / PANNINGZOOM_VIEW_SCALE;
                 mouseyinmgs_realimg -= mouseYfromcenter / PANNINGZOOM_VIEW_SCALE;
@@ -377,18 +372,11 @@
 
                 
             function zoomPanning_move(mX, mY) {
-                if(zoomPanningStayed) {
-                    const deltaX = (mX - startX) / PANNINGZOOM_VIEW_SCALE;
-                    const deltaY = (mY - startY) / PANNINGZOOM_VIEW_SCALE;
-                    currTranslateX += deltaX;
-                    currTranslateY += deltaY;
-                }
-                else {
-                    const deltaX = (mX - startX) * zoom_moveing_scale_x;
-                    const deltaY = (mY - startY) * zoom_moveing_scale_y;
-                    currTranslateX -= deltaX;
-                    currTranslateY -= deltaY;
-                }
+                const deltaX = (mX - startX) / PANNINGZOOM_VIEW_SCALE;
+                const deltaY = (mY - startY) / PANNINGZOOM_VIEW_SCALE;
+                currTranslateX += deltaX;
+                currTranslateY += deltaY;
+
                 startX = mX;
                 startY = mY;
                 
@@ -397,7 +385,7 @@
             
 
             function zoomPanning_Update() {
-                console.log(`PANNINGZOOM_VIEW_SCALE - ${PANNINGZOOM_VIEW_SCALE}`);
+                // console.log(`PANNINGZOOM_VIEW_SCALE - ${PANNINGZOOM_VIEW_SCALE}`);
                 
                 const maxTranslateX = player.videoWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
                 const maxTranslateY = player.videoHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
@@ -759,12 +747,10 @@
             let leftmouse_movestarted = false;
             let leftmousedowned = false;
             let leftmousedownpos = 0;
-            let leftcancelnextclick = false;
 
             let rightmouse_movestarted = false;
             let rightmousedowned = false;
             let rightmousedownpos = 0;
-            let rightcancelnextclick = false;
 
             let videoseekingproceeding = false;
             let positionscrollstart;
@@ -772,33 +758,20 @@
             let startvideoposition;
 
             let intervallyspeedinfodisplay = undefined;
+            let mouselongpressedcheckTimer = null;
+
+            function mouseLClickLongPressed() {
+                mouselongpressedcheckTimer = null;
+                console.log("long pressed !");
+            }
             
-            document.addEventListener("click", (param) => {
-
-                switch(param.button) {
-                    case 0:
-
-                        if(zoomPanningStayed) {
-                        }
-                        else {
-                            console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
-
-                            if(leftcancelnextclick) leftcancelnextclick = false;
-                            else pauseplay();
-                        }
-
-                        break;
-                    case 1:
-
-                        break;
-                    case 2:
-                        if(rightcancelnextclick) rightcancelnextclick = false;
-                        else {
-                            console.log("right click");
-                        }
-                        break;
+            function mouseLClickShortPressed() {
+                if(zoomPanningStayed) {
+                    zoomPanningStayed = false;
+                    console.log(`zoomPanningStayed exit`);
+                    ExitZoomPanning();
                 }
-            });
+            }
 
             // let videozoompanning_mousepos_start = {x:0, y:0};
             // let videozoompanning_videopos = {x:0, y:0};
@@ -809,7 +782,7 @@
                 switch(param.button) {
                     case 0: // left
 
-                    // zoomPanningStayed = true;
+                        mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
 
                         if(zoomPanningStayed) {
                             videozoompanning_dragging = true;
@@ -817,7 +790,7 @@
                             // console.log(`videozoompanning_mousepos_start - ${currTranslateX}, ${currTranslateY}`);
                             
                             // PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH;
-                            console.log(`1:1 scale: ${PANNINGZOOM_VIEW_SCALE}`);
+                            // console.log(`1:1 scale: ${PANNINGZOOM_VIEW_SCALE}`);
                             zoomPanning_start(param.x, param.y);
                             player.style.cursor = 'none';
 
@@ -834,9 +807,6 @@
                     case 1: // middle
                         player.playbackRate = 1.0;
                         setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
-                        
-                        ExitZoomPanning();
-
                         break;
                     
                     case 2: // right
@@ -853,17 +823,21 @@
                 switch(param.button) {
                     case 0: // left
                         {
+                        
                             videozoompanning_dragging = false;
                             player.style.cursor = '';
 
                             if(zoomPanningStayed) {
                             }
                             else {
-                                leftmousedowned = false;                        
-                                if(!pastpausedstate) {
-                                    player.play();
-                                }
+                                leftmousedowned = false;
+                                pauseplay();
                                 clearInterval(seeking_labelsetting_handler);
+                            }
+
+                            if(mouselongpressedcheckTimer != null) { // cancel longpressed timeout 
+                                clearInterval(mouselongpressedcheckTimer);
+                                mouseLClickShortPressed();
                             }
                         }
                         break;
@@ -933,27 +907,18 @@
             let speed_currentpush;
 
             document.addEventListener("mousemove", (param) => {
+                
+                if(mouselongpressedcheckTimer != null) {
+                    clearTimeout(mouselongpressedcheckTimer);
+                    mouselongpressedcheckTimer = null;
+                }
+
                 if(videozoompanning_dragging) {
-                    
                     zoomPanning_move(param.clientX, param.clientY);
-
-                    // const deltaX = (param.x - currTranslateX) / PANNINGZOOM_VIEW_SCALE;
-                    // const deltaY = (param.y - currTranslateY) / PANNINGZOOM_VIEW_SCALE;
-
-                    // currTranslateX += deltaX;
-                    // currTranslateY += deltaY;
-
-                    // console.log(`videopos - ${currTranslateX}, ${currTranslateY}`);
-
-                    // player.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
-
-                    // currTranslateX = param.x;
-                    // currTranslateY = param.y;
                 }
 
                 if(leftmousedowned) {
                     // console.log("mousemove !");
-                    leftcancelnextclick = true;
 
                     let diff = param.x - leftmousedownpos;
                     if(diff > scroll_range) diff = scroll_range;
@@ -971,7 +936,7 @@
                         leftmouse_movestarted = false;
 
                         pastpausedstate = player.paused;
-                        console.log(`pause !`);
+                        // console.log(`pause !`);
                         player.pause();
                         positionscrollstart = positionscroll;
                         startvideoposition = player.currentTime;
@@ -990,7 +955,6 @@
 
                 }
                 else if(rightmousedowned) {
-                    rightcancelnextclick = true;
 
                     let diff = rightmousedownpos - param.x;
                     if(diff > scroll_range) diff = scroll_range;

@@ -11,9 +11,10 @@ const listenaddress = '0.0.0.0';
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-
 // Middleware to parse JSON request bodies
 app.use(express.json());
+
+const thumbnail_store_ext = 'jpg';
 
 // Ensure the thumbnails directory exists
 const thumbnailsDir = path.join(__dirname, 'thumbnails');
@@ -34,7 +35,7 @@ app.post('/save-thumbnail', (req, res) => {
 
         // Extract video name without extension
         const videoName = path.basename(videoPath);
-        const thumbnailFileName = `${decodeURIComponent(videoName)}.jpg`;
+        const thumbnailFileName = `${decodeURIComponent(videoName)}.${thumbnail_store_ext}`;
         const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
 
         // Convert Base64 data to binary and write to file
@@ -65,13 +66,14 @@ app.get('/thumbnail-exists', (req, res) => {
         });
     }
 
-    const videoName = path.basename(videoPath, path.extname(videoPath));
-    const thumbnailFileName = `${decodeURIComponent(videoName)}.jpg`;
+    // console.log(`input - ${videoPath}`);
+
+    const videoName = videoPath; //path.basename(videoPath, path.extname(videoPath));
+    let thumbnailFileName = `${decodeURIComponent(videoName)}.${thumbnail_store_ext}`;
     const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
 
     const exists = fs.existsSync(thumbnailPath);
-
-    console.log(`[Thumbnail Check] ${videoPath} -> ${exists ? 'Exists' : 'Not Found'}`);
+    console.log(`[Thumbnail Check] ${thumbnailPath} -> ${exists ? 'Exists' : 'Not Found'}`);
 
     res.json({
         exists: exists,

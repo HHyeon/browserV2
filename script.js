@@ -624,8 +624,6 @@ function randChoice(arr) {
 
 async function checkThumbnail(videoFile) {
 
-    videoFile += '.jpg';
-
     console.log(`[Cache] Checking thumbnail for: ${videoFile}`);
 
     const res = await fetch(
