@@ -831,7 +831,10 @@
                             }
                             else {
                                 leftmousedowned = false;
-                                pauseplay();
+                                            
+                                player_paused_state = false;
+                                player.play();
+                                setLabelText("play");
                                 clearInterval(seeking_labelsetting_handler);
                             }
 
