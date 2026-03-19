@@ -397,7 +397,9 @@ async function processVideoLoadQueue() {
                     return;
                 }
 
-                console.log(`[Cache] Frame extracted: ${videoInfo.fname} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
+                console.log(`[Cache] Frame extracted: ${videoInfo.name} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
+
+                console.log(videoInfo);
 
                 // 🔑 서버에 썸네일 저장
                 const response = await fetch(`${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/save-thumbnail`, {
@@ -406,7 +408,7 @@ async function processVideoLoadQueue() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        videoPath: videoInfo.fname.replace(' ', '_'), // 공백이 있는 경우 '_'로 대체하여 저장
+                        videoPath: videoInfo.cacheKey.replace(' ', '_'), // 공백이 있는 경우 '_'로 대체하여 저장
                         thumbnailData: imagedatabase64
                     })
                 });
@@ -419,6 +421,8 @@ async function processVideoLoadQueue() {
                 } else {
                     console.error(`[Cache] Failed to save thumbnail for ${videoInfo.fname}`);
                 }
+
+                console.log(`${makeitem_Store[videoInfo.fname].imgpath}`);
 
                 // 🔑 makeitem_Store 업데이트: fname 키로 접근
                 if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
@@ -627,7 +631,7 @@ async function checkThumbnail(videoFile) {
     console.log(`[Cache] Checking thumbnail for: ${videoFile}`);
 
     const res = await fetch(
-        `${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/thumbnail-exists?videoPath=${encodeURIComponent(videoFile)}`
+        `${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/thumbnail-exists?videoPath=${videoFile}`
     );
 
     const data = await res.json();
@@ -715,18 +719,16 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                     else
                     {
                         // 🔑 원본 경로로 캐시 조회 (일관성)
-
+												
                         // console.log(`vidpath - ${vidpath}`);
 
-                        let fbasename = vidpath.substring(vidpath.lastIndexOf('/') + 1);
-
-                        const result = await checkThumbnail(fbasename.replace(' ', '_')); // 공백이 있는 경우 '_'로 대체하여 체크
+                        const result = await checkThumbnail(vidpath.replace(' ', '_')); // 공백이 있는 경우 '_'로 대체하여 체크
 
                         if(result.exists) {
-                            let fnamethumbnailed = fname + '.jpg';
+                            // let fnamethumbnailed = fname + '.jpg';
                             item_img = true;
-                            imgpath = 'thumbnails/' + encodeURIComponent(fnamethumbnailed);
-                            console.log(`[Cache] Checking thumbnail at: ${imgpath}`);
+                            imgpath = result.thumbnailPath;
+                            console.log(`[Cache] getting thumbnail at: ${imgpath}`);
                         }
                         else {
                             need_video_load = true;
@@ -820,15 +822,17 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         let imageviewBadge = '';
         let maxviewBadge = '';
         if(hasHighImageRatio) {
-            imageviewBadge = `<div class="badge">
-                imageview
-                <a href="${document.location.origin}${document.location.pathname}/imageview.html?p=${belowpath}" target="_blank" class="item-badge-link"></a>
-            </div>`;
-            maxviewBadge = `<div class="badge">
-                maxview
-                <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
-            </div>`;
+            // imageviewBadge = `<div class="badge">
+            //     imageview
+            //     <a href="${document.location.origin}${document.location.pathname}/imageview.html?p=${belowpath}" target="_blank" class="item-badge-link"></a>
+            // </div>`;
+            // maxviewBadge = `<div class="badge">
+            //     maxview
+            //     <a href="maxview://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
+            // </div>`;
         }
+
+        
         linkelemnts = `
         <div class="badge-container">
             ${playvidBadge}
@@ -836,13 +840,13 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             ${maxviewBadge}
         </div>
         `;
-
-            // <div class="badge">
-            //     wexpl
-            //     <a href="winexplr://open?path=${belowpathlink}" return false;" class="item-badge-link"></a>
-            // </div>
-    
-        linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
+        
+        if(hasHighImageRatio) {
+            linkelemnts += `<a href="${document.location.origin}${document.location.pathname}/imageview.html?p=${belowpath}" target="_blank"></a>`;
+        }
+        else {
+            linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
+        }
     }
 
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;    

@@ -177,16 +177,94 @@
         let images = [];
         let idx = 0;
 
-        async function startup() {
-            const json = await dirseek(parampath);
+        async function prepareimageDir(imgdir) {
+            currentimageDirListname = imgdir;
+            console.log(`preparing dir ${imgdir}`);
+
+            images = [];
+            idx = 0;
+
+            const json = await dirseek(imgdir);
             if(json.ret) {
                 images = json.data.map(d=>d.d).filter(isImage).sort((a,b)=>a.localeCompare(b));
                 if(images.length>0) {
+                    console.log(`showing imgs ${images.length}`);
                     showImage(0);
                 } else {
                     console.log('no images');
                 }
             }
+            else {
+                console.log(`${imgdir} invalid !!`);
+            }
+        }
+
+        function isImageExt(filename) {
+            let arg = filename.toLowerCase();
+            if(arg.endsWith('jpeg') || arg.endsWith('jpg') || arg.endsWith('png')) return true;
+            else return false;
+        }
+
+        let imagesDirList = [];
+        let imagesDirList_jumpidx=0;
+        let currentimageDirListname;
+
+        async function startup() {
+            prepareimageDir(parampath);
+
+            const upperdirpath = parampath.substring(0, parampath.lastIndexOf('/'));
+            const jsondata = await dirseek(upperdirpath);
+
+            if(jsondata["ret"]) {
+                let dirlist = jsondata["data"];
+                
+                // remove hidden files
+                while(true) {  
+                    const find__ = dirlist.find((a) => { return a["d"][0] == '.';});
+                    if(find__ == undefined) break;
+                    const idx = dirlist.lastIndexOf(find__);
+                    dirlist.splice(idx, 1);
+                }
+
+                // console.log(dirlist);
+
+                dirlist.forEach(async each => {
+                    // console.log(each.d);
+
+                    const belowdirjsondata = await dirseek(`${upperdirpath}/${each.d}`);
+
+                    if(belowdirjsondata.ret) {
+                        let dirbelowimgs = [];
+                        let imageCount = 0;
+                
+                        belowdirjsondata["data"].forEach(below_each => {
+                            const name = below_each["d"];
+                            const time = below_each["t"];
+                            
+                            let fnameext = name.substring(name.lastIndexOf('.')+1);
+                            
+                            fnameext = fnameext.toLowerCase();
+                            
+                            if(isImageExt(fnameext)) {
+                                dirbelowimgs.push(name);
+                                imageCount++;
+                            }
+                        });
+                
+                        let totalFiles = jsondata["data"].length;
+
+                        // console.log(`${each.d} -> ${totalFiles}`);
+
+                        let imageRatio = totalFiles > 0 ? imageCount / totalFiles : 0;
+                        let hasHighImageRatio = imageRatio >= 0.9;
+
+                        if(hasHighImageRatio) 
+                            imagesDirList.push(each.d);
+                    }
+                });
+
+            }
+
         }
 
         function showImage(i) {
@@ -199,7 +277,7 @@
 
             idx = (i + images.length) % images.length;
             const img = document.getElementById('viewer');
-            img.src = parampath + '/' + encodeURI(images[idx]);
+            img.src = currentimageDirListname + '/' + encodeURI(images[idx]);
 
             if(img.complete) {
                 onImageLoaded();
@@ -300,7 +378,7 @@
 
 
         function zoomPanning_Update() {
-            console.log(`PANNINGZOOM_VIEW_SCALE - ${PANNINGZOOM_VIEW_SCALE}`);
+            // console.log(`PANNINGZOOM_VIEW_SCALE - ${PANNINGZOOM_VIEW_SCALE}`);
             
             const maxTranslateX = viewerElem.naturalWidth/2 - (window.innerWidth/2/PANNINGZOOM_VIEW_SCALE);
             const maxTranslateY = viewerElem.naturalHeight/2 - (window.innerHeight/2/PANNINGZOOM_VIEW_SCALE);
@@ -516,6 +594,43 @@
             
         });
 
+        
+
+        function imgDirListJump(type) {
+
+            const currentimgDirname = currentimageDirListname.substring(currentimageDirListname.lastIndexOf('/')+1);
+            let nextimgDirname = null;
+            while(true) {
+
+                if(type == 0) //next 
+                {
+                    imagesDirList_jumpidx++;
+                    if(imagesDirList_jumpidx >= imagesDirList.length) imagesDirList_jumpidx = 0;
+                }
+                else if(type == 1) // prev
+                {
+                    if(imagesDirList_jumpidx > 0) {
+                        imagesDirList_jumpidx --;
+                    }
+                    else {
+                        imagesDirList_jumpidx = imagesDirList.length - 1;
+                    }
+                }
+                else
+                {
+                    imagesDirList_jumpidx = (Math.round(Math.random()*1000))%imagesDirList.length;
+                }
+
+                if(imagesDirList[imagesDirList_jumpidx] != currentimgDirname) {
+                    nextimgDirname = imagesDirList[imagesDirList_jumpidx];
+                    break;
+                }
+            }
+            prepareimageDir(`${currentimageDirListname.substring(0, currentimageDirListname.lastIndexOf('/'))}/${nextimgDirname}`);
+            
+        }
+        
+
         document.addEventListener('keydown', e=>{
             if(e.key=='ArrowRight' || e.key==' ' ) nextImage();
             else if(e.key=='ArrowLeft') showImage(idx-1);
@@ -525,6 +640,18 @@
                 } else {
                     if (document.exitFullscreen) document.exitFullscreen();
                 }
+            }
+            else if(e.key == ']') 
+            {
+                imgDirListJump(0);
+            }
+            else if(e.key == '[') 
+            {
+                imgDirListJump(1);
+            }
+            else if(e.key == '\\') 
+            {
+                imgDirListJump(2);
             }
             else if(/^[0-9]$/.test(e.key)) {
                 if(images.length>0) {

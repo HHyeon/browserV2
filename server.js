@@ -17,9 +17,37 @@ app.use(express.json());
 const thumbnail_store_ext = 'jpg';
 
 // Ensure the thumbnails directory exists
-const thumbnailsDir = path.join(__dirname, 'thumbnails');
+const thumbnailsDir = path.join(__dirname, '.');
 if (!fs.existsSync(thumbnailsDir)) {
     fs.mkdirSync(thumbnailsDir, { recursive: true });
+}
+
+function return_thumbnailPath(videoPath) {
+    const filename = path.basename(videoPath); //path.basename(videoPath, path.extname(videoPath));
+    let thumbnailFileName = `${decodeURIComponent(filename)}.${thumbnail_store_ext}`;
+    let thumbnailPath = '';
+    
+    if(videoPath.startsWith('drvs/')) {
+        let _videoPath = videoPath.substr('drvs/'.length);
+
+        thumbnailPath = 'drvs/';
+
+        thumbnailPath += _videoPath.substr(0, _videoPath.indexOf('/'));
+
+        thumbnailPath += '/.thumbnails/';
+                
+        if (!fs.existsSync(thumbnailPath)) {
+            fs.mkdirSync(thumbnailPath, { recursive: true });
+        }
+
+        thumbnailPath += thumbnailFileName;
+    }
+    else {
+        console.log('using root thumbnailDir');
+        thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
+    }
+
+    return thumbnailPath;
 }
 
 // Route to save thumbnail to server disk
@@ -27,16 +55,11 @@ app.post('/save-thumbnail', (req, res) => {
     try {
         const { videoPath, thumbnailData } = req.body;
 
-        // console.log('Received thumbnail data for video:', videoPath);
-        
         if (!videoPath || !thumbnailData) {
             return res.status(400).json({ error: 'Missing videoPath or thumbnailData' });
         }
-
-        // Extract video name without extension
-        const videoName = path.basename(videoPath);
-        const thumbnailFileName = `${decodeURIComponent(videoName)}.${thumbnail_store_ext}`;
-        const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
+				
+        let thumbnailPath = return_thumbnailPath(videoPath);
 
         // Convert Base64 data to binary and write to file
         const base64Data = thumbnailData.replace(/^data:image\/\w+;base64,/, '');
@@ -44,11 +67,11 @@ app.post('/save-thumbnail', (req, res) => {
 
         fs.writeFileSync(thumbnailPath, buffer);
 
-        console.log(`[Thumbnail Saved] ${videoPath} -> ${thumbnailFileName}`);
+        console.log(`[Thumbnail Saved] ${thumbnailPath}`);
 
         res.json({
             success: true,
-            thumbnailPath: `/thumbnails/${thumbnailFileName}`
+            thumbnailPath: `${thumbnailPath}`
         });
     } catch (error) {
         console.error('Error saving thumbnail:', error);
@@ -65,19 +88,16 @@ app.get('/thumbnail-exists', (req, res) => {
             error: "videoPath parameter required"
         });
     }
-
-    // console.log(`input - ${videoPath}`);
-
-    const videoName = videoPath; //path.basename(videoPath, path.extname(videoPath));
-    let thumbnailFileName = `${decodeURIComponent(videoName)}.${thumbnail_store_ext}`;
-    const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
-
+    
+    let thumbnailPath = return_thumbnailPath(videoPath);
+		
     const exists = fs.existsSync(thumbnailPath);
+    
     console.log(`[Thumbnail Check] ${thumbnailPath} -> ${exists ? 'Exists' : 'Not Found'}`);
 
     res.json({
         exists: exists,
-        thumbnailPath: `/thumbnails/${thumbnailFileName}`
+        thumbnailPath: `${thumbnailPath}`
     });
 });
 
