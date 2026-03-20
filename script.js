@@ -1,6 +1,7 @@
 
 
 const THUMBNAIL_CACHING_SERVER_URL_PORT = '3001'; // 🔑 썸네일 캐싱 서버 URL (Node.js 서버)
+const FFMPEG_SERVER_URL = 'http://192.168.0.101:3002'; // 🔑 FFmpeg 디코딩 서버 URL
 
 
 
@@ -337,162 +338,236 @@ function startprocessvideoloadqueue()
 // 전역 변수 추가 (file 상단)
 let videoLoadQueue = [];        // 로드 대기 중인 비디오 정보
 let activeVideoLoads = 0;       // 현재 진행 중인 로드 개수
-const MAX_CONCURRENT_LOADS = 1; // 동시 로드 최대 개수
+const MAX_CONCURRENT_LOADS = 8; // 동시 로드 최대 개수
+let isPageFocused = !document.hidden; // 페이지 포커스 상태
+
+// 페이지 가시성/포커스 상태 감지
+function pauseAllIntervals() {
+    if (!isPageFocused) return;
+    isPageFocused = false;
+    ThumbnailIntervalManager.stopAll();
+}
+
+function resumeVisibleIntervals() {
+    if (isPageFocused) return;
+    isPageFocused = true;
+    ThumbnailIntervalManager.resumeAll();
+}
+
+window.addEventListener('focus', resumeVisibleIntervals);
+window.addEventListener('blur', pauseAllIntervals);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        pauseAllIntervals();
+    } else {
+        resumeVisibleIntervals();
+    }
+});
+
+// 비디오 썸네일 주기적 업데이트용 IntervalManager
+const ThumbnailIntervalManager = {
+    intervals: new Map(),
+    pendingFetches: new Set(),
+
+    start(fname, imgElement) {
+        if (this.intervals.has(fname)) {
+            return;
+        }
+        if (!isPageFocused || document.hidden) return;
+        if (!imgElement.isConnected) return;
+
+        const intervalId = setInterval(() => {
+            this.tick(fname, imgElement);
+        }, 1000);
+        this.intervals.set(fname, intervalId);
+    },
+
+    stop(fname) {
+        if (this.intervals.has(fname)) {
+            clearInterval(this.intervals.get(fname));
+            this.intervals.delete(fname);
+        }
+        this.pendingFetches.delete(fname);
+    },
+
+    tick(fname, imgElement) {
+        if (!isPageFocused || document.hidden) return;
+        if (this.pendingFetches.has(fname)) return;
+
+        if (!imgElement.isConnected) {
+            this.stop(fname);
+            thumbnailObserver.unobserve(imgElement);
+            return;
+        }
+
+        const itemData = makeitem_Store[fname];
+        if (!itemData || !itemData.videoPath) {
+            this.stop(fname);
+            return;
+        }
+
+        const videoDuration = itemData.videoDuration || 60;
+        itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 1) % videoDuration;
+        const seekTime = itemData.currentSeekTime;
+        const currentFname = fname;
+        const currentSeekTime = seekTime;
+
+        this.pendingFetches.add(currentFname);
+
+        fetch(`${FFMPEG_SERVER_URL}/decode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoPath: itemData.videoPath, seekTime: currentSeekTime })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (!isPageFocused || document.hidden) return;
+            if (!result.success || !result.base64 || result.base64.length <= 100) return;
+            if (!imgElement.isConnected) return;
+            if (!this.intervals.has(currentFname)) return;
+            imgElement.src = result.base64;
+            itemData.imgpath = result.base64;
+        })
+        .catch(ex => {
+            console.error(`[ThumbnailUpdate] Error updating ${currentFname}:`, ex);
+        })
+        .finally(() => {
+            this.pendingFetches.delete(currentFname);
+        });
+    },
+
+    stopAll() {
+        this.intervals.forEach((id) => {
+            clearInterval(id);
+        });
+        this.intervals.clear();
+        this.pendingFetches.clear();
+    },
+
+    resumeAll() {
+        document.querySelectorAll('img[data-fname]').forEach(img => {
+            const fname = img.dataset.fname;
+            if (!this.intervals.has(fname)) {
+                this.start(fname, img);
+            }
+        });
+    }
+};
+
+// 비디오 썸네일 주기적 업데이트용 IntersectionObserver
+const thumbnailObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        const fname = entry.target.dataset.fname;
+        const itemData = makeitem_Store[fname];
+        if (!itemData) return;
+
+        if (entry.isIntersecting) {
+            ThumbnailIntervalManager.start(fname, entry.target);
+        } else {
+            ThumbnailIntervalManager.stop(fname);
+        }
+    });
+}, { threshold: 0.1 });
+
+// DOM 제거 감지용 MutationObserver
+const domRemovalObserver = new MutationObserver((mutations) => {
+    mutations.forEach(mutation => {
+        mutation.removedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                const removedImgs = node.matches?.('img[data-fname]') ? [node] : Array.from(node.querySelectorAll?.('img[data-fname]') || []);
+                removedImgs.forEach(img => {
+                    const fname = img.dataset.fname;
+                    ThumbnailIntervalManager.stop(fname);
+                    thumbnailObserver.unobserve(img);
+                });
+            }
+        });
+    });
+});
+
+domRemovalObserver.observe(document.body, { childList: true, subtree: true });
+
+function clearAllThumbnailIntervals() {
+    ThumbnailIntervalManager.stopAll();
+    thumbnailObserver.disconnect();
+}
 
 // makeitem() 호출 후 추가할 함수
-async function processVideoLoadQueue() {
-    // 대기 중인 비디오가 있고, 동시 로드 제한 미만일 때만 처리
-    if (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
-        const videoInfo = videoLoadQueue.shift(); // 큐에서 제거
+function processVideoLoadQueue() {
+    while (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
+        const videoInfo = videoLoadQueue.shift();
         activeVideoLoads++;
 
         console.log(`[VideoLoad] Starting ${videoInfo.name} (${activeVideoLoads}/${MAX_CONCURRENT_LOADS})`);
 
         const videoElement = videoInfo.element;
         if (!videoElement || !videoElement.parentElement) {
-            // 요소가 DOM에서 제거된 경우 스킵
             activeVideoLoads--;
-            processVideoLoadQueue();
-            return;
+            continue;
         }
 
-        // 🔑 비디오 메타데이터 로드 대기 (중요!)
-        const prepareVideo = () => {
-            // 비디오 로드 시작: 1/3 지점으로 seek
-            if ('fastSeek' in videoElement) {
-                videoElement.fastSeek(videoElement.duration / 3);
-            } else {
-                videoElement.currentTime = videoElement.duration / 3;
+        const videoPath = videoInfo.cacheKey || videoElement.src;
+        const videoDuration = videoElement.duration || 60;
+        const seekTime = (Math.random() * videoDuration).toFixed(1);
+
+        console.log(`[FFmpeg] Decoding ${videoInfo.name} at ${seekTime}s via ${FFMPEG_SERVER_URL}`);
+
+        fetch(`${FFMPEG_SERVER_URL}/decode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoPath, seekTime })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`FFmpeg decode failed: ${response.status}`);
+            return response.json();
+        })
+        .then(decodeResult => {
+            if (!decodeResult.success) throw new Error(decodeResult.error || 'FFmpeg decode failed');
+
+            const imagedatabase64 = decodeResult.base64;
+
+            if (!imagedatabase64 || imagedatabase64.length < 100) {
+                console.error(`[Cache] Invalid image data for ${videoInfo.fname}: ${imagedatabase64?.length || 0} bytes`);
+                return;
             }
-        };
 
-        // 메타데이터 로드 여부 확인
-        if (videoElement.readyState >= 1 && Number.isFinite(videoElement.duration)) {
-            // 이미 로드됨
-            console.log(`[VideoLoad] Metadata ready, seeking to 1/3 point`);
-            prepareVideo();
-        } else {
-            // 로드 대기
-            console.log(`[VideoLoad] Waiting for metadata...`);
-            videoElement.addEventListener('loadedmetadata', () => {
-                console.log(`[VideoLoad] Metadata loaded, seeking to 1/3 point`);
-                prepareVideo();
-            }, { once: true });
-        }
+            console.log(`[Cache] Frame extracted: ${videoInfo.name} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
 
-        // seeked 이벤트: 1회만 처리
-        const handleSeeked = async (event) => {
-            videoElement.removeEventListener('seeked', handleSeeked);
-            
-            try {
-                const imagedatabase64 = video_to_image_base64(videoElement);
-                // const targetvidtime = videoElement.currentTime;
-                // const cacheKey = videoInfo.cacheKey;  // 🔑 원본 경로 사용
-
-                // 🔑 Base64 유효성 검증
-                if (!imagedatabase64 || imagedatabase64.length < 100) {
-                    console.error(`[Cache] Invalid image data for ${videoInfo.fname}: ${imagedatabase64?.length || 0} bytes`);
-                    activeVideoLoads--;
-                    processVideoLoadQueue();
-                    return;
-                }
-
-                console.log(`[Cache] Frame extracted: ${videoInfo.name} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
-
-                console.log(videoInfo);
-
-                // 🔑 서버에 썸네일 저장
-                const response = await fetch(`${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/save-thumbnail`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        videoPath: videoInfo.cacheKey.replace(' ', '_'), // 공백이 있는 경우 '_'로 대체하여 저장
-                        thumbnailData: imagedatabase64
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    // 서버에서 저장된 경로를 makeitem_Store에 저장
-                    makeitem_Store[videoInfo.fname].imgpath = result.thumbnailPath;
-                } else {
-                    console.error(`[Cache] Failed to save thumbnail for ${videoInfo.fname}`);
-                }
-
-                console.log(`${makeitem_Store[videoInfo.fname].imgpath}`);
-
-                // 🔑 makeitem_Store 업데이트: fname 키로 접근
-                if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
-                    makeitem_Store[videoInfo.fname].need_video_load = false;
-                    makeitem_Store[videoInfo.fname].item_img = true;
-                    makeitem_Store[videoInfo.fname].imgpath = result.thumbnailPath;
-                    console.log(`[Cache] Updated makeitem_Store for: ${videoInfo.fname}`);
-                }
-                
-                // 🔑 DOM 업데이트: 비디오 요소를 이미지로 교체
-                if (videoElement.parentElement) {
-                    // 비디오 요소 제거
-                    videoElement.pause();
-                    videoElement.removeAttribute('src');
-                    videoElement.load();
-                    
-                    // 같은 위치에 이미지 추가
-                    const imgElement = document.createElement('img');
-                    imgElement.src = document.location.origin + document.location.pathname + result.thumbnailPath;
-                    console.log(`[Cache] Setting image src to: ${videoInfo.fname}`);
-                    imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover;';
-                    imgElement.alt = 'Cached thumbnail';
-                    
-                    makeitem_Store[videoInfo.fname].imgpath = imgElement.src; // ✅ makeitem_Store에 최종 이미지 경로 저장
-                    
-                    videoElement.parentElement.insertBefore(imgElement, videoElement);
-                    videoElement.remove();
-                    console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
-                }
-                
-                activeVideoLoads--;
-                processVideoLoadQueue(); // 다음 항목 처리
-            } catch (ex) {
-                console.error(`[VideoLoad] Error processing ${videoInfo.fname || 'unknown'}`, ex);
-            } finally {
-                activeVideoLoads--;
-                processVideoLoadQueue(); // 다음 항목 처리
+            if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
+                makeitem_Store[videoInfo.fname].need_video_load = false;
+                makeitem_Store[videoInfo.fname].item_img = true;
+                makeitem_Store[videoInfo.fname].imgpath = imagedatabase64;
+                makeitem_Store[videoInfo.fname].videoPath = videoPath;
+                makeitem_Store[videoInfo.fname].videoDuration = videoElement.duration || 60;
+                makeitem_Store[videoInfo.fname].currentSeekTime = Math.random() * (videoElement.duration || 60);
+                console.log(`[Cache] Updated makeitem_Store for: ${videoInfo.fname}`);
             }
-        };
 
-        videoElement.addEventListener('seeked', handleSeeked, { once: true });
+            if (videoElement.parentElement) {
+                videoElement.pause();
+                videoElement.removeAttribute('src');
+                videoElement.load();
 
-        // 타임아웃: seeked 미발생 시 정리
-        const timeoutId = setTimeout(() => {
-            try { videoElement.removeEventListener('seeked', handleSeeked); } catch(e){}
-            clearInterval(removalCheckInterval);
-            console.warn(`[VideoLoad] Timeout - ${videoInfo.fname} (${videoInfo.name})`);
+                const imgElement = document.createElement('img');
+                imgElement.src = imagedatabase64;
+                imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover;';
+                imgElement.alt = 'Video thumbnail';
+                imgElement.dataset.fname = videoInfo.fname;
+
+                videoElement.parentElement.insertBefore(imgElement, videoElement);
+                videoElement.remove();
+                console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
+
+                thumbnailObserver.observe(imgElement);
+            }
+        })
+        .catch(ex => {
+            console.error(`[VideoLoad] Error processing ${videoInfo.fname || 'unknown'}`, ex);
+        })
+        .finally(() => {
             activeVideoLoads--;
             processVideoLoadQueue();
-        }, 10000);
-
-        // DOM 제거 감지(요소가 문서에서 사라지면 정리)
-        const removalCheckInterval = setInterval(() => {
-            if (!document.contains(videoElement) || !videoElement.isConnected) {
-                try { videoElement.removeEventListener('seeked', handleSeeked); } catch(e){}
-                clearTimeout(timeoutId);
-                clearInterval(removalCheckInterval);
-                console.warn(`[VideoLoad] Video element removed from DOM - ${videoInfo.fname} (${videoInfo.name})`);
-                activeVideoLoads--;
-                processVideoLoadQueue();
-            }
-        }, 500);
-
-        // seek 에러 시에도 타임아웃/인터벌 정리
-        const originalOnError = videoElement.onerror;
-        videoElement.onerror = (ev) => {
-            try { clearTimeout(timeoutId); } catch(e){}
-            try { clearInterval(removalCheckInterval); } catch(e){}
-            if (originalOnError) try { originalOnError(ev); } catch(e){}
-        };
+        });
     }
 }
 
@@ -707,33 +782,37 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                     item_vid = true;
                     vidpath = parampath + "/" + encodeURI(fname);
                     
-                    // 🔑 IndexedDB 캐시 키: 원본 경로 (인코딩 X) → 일관성 유지
-                    // encodeURI()는 HTML 속성에만 사용, IndexedDB 키는 원본 사용
-                    cacheKey = parampath + "/" + fname;
+                    // // 🔑 IndexedDB 캐시 키: 원본 경로 (인코딩 X) → 일관성 유지
+                    // // encodeURI()는 HTML 속성에만 사용, IndexedDB 키는 원본 사용
+                    // cacheKey = parampath + "/" + fname;
 
-                    if(force)
-                    {
-                        need_video_load = true;
-                        console.log(`[Cache] video loading (force) - ${fname}`);
-                    }
-                    else
-                    {
-                        // 🔑 원본 경로로 캐시 조회 (일관성)
+                    // if(force)
+                    // {
+                    //     need_video_load = true;
+                    //     console.log(`[Cache] video loading (force) - ${fname}`);
+                    // }
+                    // else
+                    // {
+                    //     // 🔑 원본 경로로 캐시 조회 (일관성)
 												
-                        // console.log(`vidpath - ${vidpath}`);
+                    //     // console.log(`vidpath - ${vidpath}`);
 
-                        const result = await checkThumbnail(vidpath.replace(' ', '_')); // 공백이 있는 경우 '_'로 대체하여 체크
+                    //     const result = await checkThumbnail(vidpath.replace(' ', '_')); // 공백이 있는 경우 '_'로 대체하여 체크
 
-                        if(result.exists) {
-                            // let fnamethumbnailed = fname + '.jpg';
-                            item_img = true;
-                            imgpath = result.thumbnailPath;
-                            console.log(`[Cache] getting thumbnail at: ${imgpath}`);
-                        }
-                        else {
-                            need_video_load = true;
-                        }
-                    }
+                    //     if(result.exists) {
+                    //         // let fnamethumbnailed = fname + '.jpg';
+                    //         item_img = true;
+                    //         imgpath = result.thumbnailPath;
+                    //         console.log(`[Cache] getting thumbnail at: ${imgpath}`);
+                    //     }
+                    //     else {
+                    //         need_video_load = true;
+                    //     }
+                    // }
+
+
+                    need_video_load = true;
+
                 }
             }
         }
@@ -963,6 +1042,7 @@ async function startup() {
     console.log(`ordertype - ${ordertype}`);
 
     dirlist = [];
+    clearAllThumbnailIntervals();
     makeitem_Store = {};
 
     const jsondata = await dirseek(parampath);
@@ -1223,6 +1303,7 @@ document.addEventListener('keydown', (e) => {
     {
         console.log('[Cache] Force refresh: Clearing cache and reloading');
         // 캐시 초기화: makeitem_Store를 비워서 모든 항목이 다시 로드되도록 함
+        clearAllThumbnailIntervals();
         makeitem_Store = {};
         // 비디오 로드 큐도 초기화 (진행 중인 작업은 계속 진행되지만, 큐는 새로 시작)
         videoLoadQueue = [];
