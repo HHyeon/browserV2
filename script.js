@@ -368,6 +368,45 @@ document.addEventListener('visibilitychange', () => {
 const ThumbnailIntervalManager = {
     intervals: new Map(),
     pendingFetches: new Set(),
+    errorIcons: new Map(),
+
+    showError(fname, imgElement) {
+        if (this.errorIcons.has(fname)) return;
+        if (!imgElement || !imgElement.parentElement) return;
+
+        const errorEl = document.createElement('div');
+        errorEl.className = 'thumbnail-error-icon';
+        errorEl.innerHTML = '⚠';
+        errorEl.style.cssText = `
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background: rgba(255, 0, 0, 0.8);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        `;
+        imgElement.parentElement.appendChild(errorEl);
+        this.errorIcons.set(fname, errorEl);
+    },
+
+    hideError(fname) {
+        if (this.errorIcons.has(fname)) {
+            this.errorIcons.get(fname).remove();
+            this.errorIcons.delete(fname);
+        }
+    },
+
+    clearErrors() {
+        this.errorIcons.forEach(el => el.remove());
+        this.errorIcons.clear();
+    },
 
     start(fname, imgElement) {
         if (this.intervals.has(fname)) {
@@ -388,6 +427,7 @@ const ThumbnailIntervalManager = {
             this.intervals.delete(fname);
         }
         this.pendingFetches.delete(fname);
+        this.hideError(fname);
     },
 
     tick(fname, imgElement) {
@@ -410,26 +450,32 @@ const ThumbnailIntervalManager = {
         itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 1) % videoDuration;
         const seekTime = itemData.currentSeekTime;
         const currentFname = fname;
-        const currentSeekTime = seekTime;
+        const currentImgElement = imgElement;
 
         this.pendingFetches.add(currentFname);
 
         fetch(`${FFMPEG_SERVER_URL}/decode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoPath: itemData.videoPath, seekTime: currentSeekTime })
+            body: JSON.stringify({ videoPath: itemData.videoPath, seekTime: seekTime })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(result => {
             if (!isPageFocused || document.hidden) return;
             if (!result.success || !result.base64 || result.base64.length <= 100) return;
-            if (!imgElement.isConnected) return;
+            if (!currentImgElement.isConnected) return;
             if (!this.intervals.has(currentFname)) return;
-            imgElement.src = result.base64;
+            currentImgElement.src = result.base64;
             itemData.imgpath = result.base64;
+            this.hideError(currentFname);
         })
         .catch(ex => {
             console.error(`[ThumbnailUpdate] Error updating ${currentFname}:`, ex);
+            this.showError(currentFname, currentImgElement);
+            this.stop(currentFname);
         })
         .finally(() => {
             this.pendingFetches.delete(currentFname);
@@ -442,6 +488,7 @@ const ThumbnailIntervalManager = {
         });
         this.intervals.clear();
         this.pendingFetches.clear();
+        this.clearErrors();
     },
 
     resumeAll() {
@@ -563,6 +610,9 @@ function processVideoLoadQueue() {
         })
         .catch(ex => {
             console.error(`[VideoLoad] Error processing ${videoInfo.fname || 'unknown'}`, ex);
+            if (videoElement && videoElement.parentElement) {
+                ThumbnailIntervalManager.showError(videoInfo.fname, videoElement);
+            }
         })
         .finally(() => {
             activeVideoLoads--;
