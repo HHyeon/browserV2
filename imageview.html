@@ -177,7 +177,7 @@
         let images = [];
         let idx = 0;
 
-        async function prepareimageDir(imgdir) {
+        async function prepareimageDir(imgdir, random=false) {
             currentimageDirListname = imgdir;
             console.log(`preparing dir ${imgdir}`);
 
@@ -189,7 +189,9 @@
                 images = json.data.map(d=>d.d).filter(isImage).sort((a,b)=>a.localeCompare(b));
                 if(images.length>0) {
                     console.log(`showing imgs ${images.length}`);
-                    showImage(0);
+                    if(random)
+                        idx = Math.round(Math.random()*images.length);
+                    showImage(idx);
                 } else {
                     console.log('no images');
                 }
@@ -600,6 +602,7 @@
 
             const currentimgDirname = currentimageDirListname.substring(currentimageDirListname.lastIndexOf('/')+1);
             let nextimgDirname = null;
+            let randomimg = false;
             while(true) {
 
                 if(type == 0) //next 
@@ -619,6 +622,7 @@
                 else
                 {
                     imagesDirList_jumpidx = (Math.round(Math.random()*1000))%imagesDirList.length;
+                    randomimg = true;
                 }
 
                 if(imagesDirList[imagesDirList_jumpidx] != currentimgDirname) {
@@ -626,7 +630,8 @@
                     break;
                 }
             }
-            prepareimageDir(`${currentimageDirListname.substring(0, currentimageDirListname.lastIndexOf('/'))}/${nextimgDirname}`);
+
+            prepareimageDir(`${currentimageDirListname.substring(0, currentimageDirListname.lastIndexOf('/'))}/${nextimgDirname}`, randomimg);
             
         }
         

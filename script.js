@@ -38,7 +38,7 @@ let input_search = document.querySelector('.input_search');
 
 
 
-let visual_pictures_row = 3;
+let visual_pictures_row = 4;
 let visual_pictures_col = 0;
 
 
@@ -562,9 +562,13 @@ function processVideoLoadQueue() {
             if (videoElement.parentElement) {
                 videoElement.pause();
                 videoElement.removeAttribute('src');
+                videoElement.removeAttribute('poster');
                 videoElement.load();
 
-                while (videoElement.previousSibling && videoElement.previousSibling.nodeType === Node.TEXT_NODE) {
+                while (videoElement.previousSibling && (
+                    videoElement.previousSibling.nodeType === Node.TEXT_NODE ||
+                    (videoElement.previousSibling.tagName === 'IMG' && !videoElement.previousSibling.dataset.fname)
+                )) {
                     videoElement.previousSibling.remove();
                 }
 
@@ -953,10 +957,16 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         cachedAttrs = ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"`;
     }
     let videlements = `<video loop muted src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
+    
+    let layerTextStyle = 'box-sizing:border-box';
+    if(item_vid) {
+        layerTextStyle += '; display: none';
+    }
+    
     // autoplay
     ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; ">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">
-        <div class="layer-text" style="box-sizing:border-box">
+        <div class="layer-text" style="${layerTextStyle}">
             <h3>${text}</h3>
         </div>
         ` +
