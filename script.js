@@ -1,6 +1,4 @@
 
-
-const THUMBNAIL_CACHING_SERVER_URL_PORT = '3001'; // 🔑 썸네일 캐싱 서버 URL (Node.js 서버)
 const FFMPEG_SERVER_URL = 'http://192.168.0.101:3002'; // 🔑 FFmpeg 디코딩 서버 URL
 
 
@@ -40,7 +38,7 @@ let input_search = document.querySelector('.input_search');
 
 
 
-let visual_pictures_row = 4;
+let visual_pictures_row = 3;
 let visual_pictures_col = 0;
 
 
@@ -60,25 +58,6 @@ async function dirseek(param) {
 
 let lastVisibleStart = 0;  // 이전 렌더링의 시작 인덱스
 let lastVisibleEnd = 0;    // 이전 렌더링의 끝 인덱스
-
-// setInterval(() => {
-//     const visibleStart = scrolleditemidx;
-//     const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
-//     const visibleItemStart = visibleStart * visual_pictures_row;
-//     const visibleItemEnd = visibleEnd * visual_pictures_row;
-
-//     // 제거: 현재 화면 범위(visibleItemStart..visibleItemEnd) 밖의 모든 항목 제거
-//     document.querySelectorAll('[data-item-index]').forEach(el => {
-//         const idxStr = el.getAttribute('data-item-index');
-//         const idx = Number(idxStr);
-//         if (isNaN(idx)) return;
-//         if (idx < visibleItemStart || idx >= visibleItemEnd) {
-//             el.remove();
-//             console.log(`[Remove] Item ${idx} (out of range)`);
-//         }
-//     });
-
-// }, 1000);
 
 
 function eliminate_out_of_range_items(visibleItemStart, visibleItemEnd) {
@@ -364,10 +343,9 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// 비디오 썸네일 주기적 업데이트용 IntervalManager
+// 비디오 썸네일 주기적 업데이트용 Manager (fetch 완료 후 다음 fetch 방식)
 const ThumbnailIntervalManager = {
-    intervals: new Map(),
-    pendingFetches: new Set(),
+    activeItems: new Map(),
     errorIcons: new Map(),
 
     showError(fname, imgElement) {
@@ -408,35 +386,32 @@ const ThumbnailIntervalManager = {
         this.errorIcons.clear();
     },
 
+    updateProgress(fname, currentTime, duration, progressBar) {
+        if (!progressBar) return;
+        const percent = (currentTime / duration) * 100;
+        progressBar.style.width = `${percent}%`;
+    },
+
     start(fname, imgElement) {
-        if (this.intervals.has(fname)) {
-            return;
-        }
+        if (this.activeItems.has(fname)) return;
         if (!isPageFocused || document.hidden) return;
         if (!imgElement.isConnected) return;
 
-        const intervalId = setInterval(() => {
-            this.tick(fname, imgElement);
-        }, 1000);
-        this.intervals.set(fname, intervalId);
+        this.activeItems.set(fname, true);
+        this.tick(fname, imgElement);
     },
 
     stop(fname) {
-        if (this.intervals.has(fname)) {
-            clearInterval(this.intervals.get(fname));
-            this.intervals.delete(fname);
-        }
-        this.pendingFetches.delete(fname);
+        this.activeItems.delete(fname);
         this.hideError(fname);
     },
 
     tick(fname, imgElement) {
         if (!isPageFocused || document.hidden) return;
-        if (this.pendingFetches.has(fname)) return;
+        if (!this.activeItems.has(fname)) return;
 
         if (!imgElement.isConnected) {
             this.stop(fname);
-            thumbnailObserver.unobserve(imgElement);
             return;
         }
 
@@ -451,8 +426,9 @@ const ThumbnailIntervalManager = {
         const seekTime = itemData.currentSeekTime;
         const currentFname = fname;
         const currentImgElement = imgElement;
+        const progressBar = itemData.progressBar;
 
-        this.pendingFetches.add(currentFname);
+        this.updateProgress(fname, seekTime, videoDuration, progressBar);
 
         fetch(`${FFMPEG_SERVER_URL}/decode`, {
             method: 'POST',
@@ -465,36 +441,29 @@ const ThumbnailIntervalManager = {
         })
         .then(result => {
             if (!isPageFocused || document.hidden) return;
+            if (!this.activeItems.has(currentFname)) return;
             if (!result.success || !result.base64 || result.base64.length <= 100) return;
             if (!currentImgElement.isConnected) return;
-            if (!this.intervals.has(currentFname)) return;
             currentImgElement.src = result.base64;
             itemData.imgpath = result.base64;
             this.hideError(currentFname);
+            this.tick(currentFname, currentImgElement);
         })
         .catch(ex => {
             console.error(`[ThumbnailUpdate] Error updating ${currentFname}:`, ex);
             this.showError(currentFname, currentImgElement);
-            this.stop(currentFname);
-        })
-        .finally(() => {
-            this.pendingFetches.delete(currentFname);
         });
     },
 
     stopAll() {
-        this.intervals.forEach((id) => {
-            clearInterval(id);
-        });
-        this.intervals.clear();
-        this.pendingFetches.clear();
+        this.activeItems.clear();
         this.clearErrors();
     },
 
     resumeAll() {
         document.querySelectorAll('img[data-fname]').forEach(img => {
             const fname = img.dataset.fname;
-            if (!this.intervals.has(fname)) {
+            if (!this.activeItems.has(fname)) {
                 this.start(fname, img);
             }
         });
@@ -525,7 +494,6 @@ const domRemovalObserver = new MutationObserver((mutations) => {
                 removedImgs.forEach(img => {
                     const fname = img.dataset.fname;
                     ThumbnailIntervalManager.stop(fname);
-                    thumbnailObserver.unobserve(img);
                 });
             }
         });
@@ -595,15 +563,70 @@ function processVideoLoadQueue() {
                 videoElement.removeAttribute('src');
                 videoElement.load();
 
+                while (videoElement.previousSibling) {
+                    videoElement.previousSibling.remove();
+                }
+
                 const imgElement = document.createElement('img');
                 imgElement.src = imagedatabase64;
-                imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover;';
+                imgElement.style.cssText = 'position: absolute; width: 100%; height: calc(100% - 16px); top: 16px; object-fit: cover;';
                 imgElement.alt = 'Video thumbnail';
                 imgElement.dataset.fname = videoInfo.fname;
 
-                videoElement.parentElement.insertBefore(imgElement, videoElement);
+                const nameLabel = document.createElement('div');
+                nameLabel.className = 'video-name-label';
+                nameLabel.textContent = videoInfo.name;
+                nameLabel.style.cssText = `
+                    position: absolute;
+                    top: 2px;
+                    left: 0;
+                    right: 0;
+                    padding: 2px 4px;
+                    font-size: 10px;
+                    color: white;
+                    background: rgba(0, 0, 0, 0.5);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    z-index: 5;
+                `;
+
+                const progressBarContainer = document.createElement('div');
+                progressBarContainer.className = 'video-progress-container';
+                progressBarContainer.style.cssText = `
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 4px;
+                    background: rgba(0, 0, 0, 0.5);
+                    z-index: 5;
+                `;
+
+                const progressBar = document.createElement('div');
+                progressBar.className = 'video-progress-bar';
+                progressBar.style.cssText = `
+                    height: 100%;
+                    width: 0%;
+                    background: rgba(0, 200, 255, 0.8);
+                    transition: width 0.3s ease;
+                `;
+
+                const currentSeekTime = Math.random() * (videoElement.duration || 60);
+                const videoDuration = videoElement.duration || 60;
+                progressBar.style.width = `${(currentSeekTime / videoDuration) * 100}%`;
+
+                progressBarContainer.appendChild(progressBar);
+
+                videoElement.parentElement.appendChild(imgElement);
+                videoElement.parentElement.appendChild(nameLabel);
+                videoElement.parentElement.appendChild(progressBarContainer);
                 videoElement.remove();
                 console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
+
+                if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
+                    makeitem_Store[videoInfo.fname].progressBar = progressBar;
+                }
 
                 thumbnailObserver.observe(imgElement);
             }
@@ -621,56 +644,6 @@ function processVideoLoadQueue() {
     }
 }
 
-
-
-function video_to_image_base64(video) {
-    // 🔑 비디오 유효성 검증
-    if (!video || !Number.isFinite(video.videoWidth) || !Number.isFinite(video.videoHeight)) {
-        console.warn('[Cache] Invalid video dimensions:', {
-            videoWidth: video?.videoWidth,
-            videoHeight: video?.videoHeight,
-            readyState: video?.readyState,
-            networkState: video?.networkState
-        });
-        return '';  // 빈 문자열 반환
-    }
-
-    // 🔑 Canvas 크기 조정 (원본 영상 품질 유지)
-    const canvas = document.querySelector('canvas');
-    if (!canvas) {
-        console.error('[Cache] Canvas element not found');
-        return '';
-    }
-
-    // 크기: 원본의 50% (썸네일용)
-    canvas.width = video.videoWidth / 2;
-    canvas.height = video.videoHeight / 2;
-
-    // 🔑 비디오 그리기
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-        console.error('[Cache] Canvas context 2D not available');
-        return '';
-    }
-
-    try {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    } catch (ex) {
-        console.error('[Cache] Failed to draw video frame:', ex);
-        return '';
-    }
-
-    // 🔑 JPEG 품질 0.6 (고정) - 파일명에 따른 차이 제거
-    const canvasValue = canvas.toDataURL('image/jpeg', 0.6);
-    
-    if (!canvasValue || canvasValue.length < 100) {
-        console.warn('[Cache] Canvas output too small:', canvasValue.length, 'bytes');
-        return '';
-    }
-
-    console.log(`[Cache] Frame captured: ${canvas.width}x${canvas.height} → ${(canvasValue.length / 1024).toFixed(1)}KB`);
-    return canvasValue;
-}
 
 let scrolleditemidx = 0;
 let scrolleditemidx_store = 0;
@@ -749,19 +722,6 @@ function extractlastnumberfromfilename(str) {
 
 function randChoice(arr) {
     return arr[Math.floor(Math.random() * arr.length)]
-}
-
-async function checkThumbnail(videoFile) {
-
-    console.log(`[Cache] Checking thumbnail for: ${videoFile}`);
-
-    const res = await fetch(
-        `${window.location.origin}:${THUMBNAIL_CACHING_SERVER_URL_PORT}/thumbnail-exists?videoPath=${videoFile}`
-    );
-
-    const data = await res.json();
-
-    return data;
 }
 
 let makeitem_Store = {};
@@ -1192,7 +1152,7 @@ async function startup() {
 
             item_w = TopScrollView.clientWidth/visual_pictures_row;
             // item_w = 400;
-            item_h = item_w;
+            item_h = item_w/16*9;
 
             visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
 
@@ -1402,12 +1362,3 @@ document.addEventListener('keydown', (e) => {
 
 });
 
-// only rerun startup when width changes, n ot height
-let lastWindowWidth = window.innerWidth;
-window.addEventListener("resize", () => {
-    const w = window.innerWidth;
-    if (w !== lastWindowWidth) {
-        lastWindowWidth = w;
-        startup();
-    }
-});
