@@ -369,6 +369,7 @@ const ThumbnailIntervalManager = {
             align-items: center;
             justify-content: center;
             z-index: 10;
+            pointer-events: none;
         `;
         imgElement.parentElement.appendChild(errorEl);
         this.errorIcons.set(fname, errorEl);
@@ -563,13 +564,13 @@ function processVideoLoadQueue() {
                 videoElement.removeAttribute('src');
                 videoElement.load();
 
-                while (videoElement.previousSibling) {
+                while (videoElement.previousSibling && videoElement.previousSibling.nodeType === Node.TEXT_NODE) {
                     videoElement.previousSibling.remove();
                 }
 
                 const imgElement = document.createElement('img');
                 imgElement.src = imagedatabase64;
-                imgElement.style.cssText = 'position: absolute; width: 100%; height: calc(100% - 16px); top: 16px; object-fit: cover;';
+                imgElement.style.cssText = 'position: absolute; width: 100%; height: calc(100% - 16px); top: 16px; object-fit: cover; pointer-events: none;';
                 imgElement.alt = 'Video thumbnail';
                 imgElement.dataset.fname = videoInfo.fname;
 
@@ -589,6 +590,7 @@ function processVideoLoadQueue() {
                     overflow: hidden;
                     text-overflow: ellipsis;
                     z-index: 5;
+                    pointer-events: none;
                 `;
 
                 const progressBarContainer = document.createElement('div');
@@ -601,6 +603,7 @@ function processVideoLoadQueue() {
                     height: 4px;
                     background: rgba(0, 0, 0, 0.5);
                     z-index: 5;
+                    pointer-events: none;
                 `;
 
                 const progressBar = document.createElement('div');
@@ -610,6 +613,7 @@ function processVideoLoadQueue() {
                     width: 0%;
                     background: rgba(0, 200, 255, 0.8);
                     transition: width 0.3s ease;
+                    pointer-events: none;
                 `;
 
                 const currentSeekTime = Math.random() * (videoElement.duration || 60);
@@ -618,9 +622,9 @@ function processVideoLoadQueue() {
 
                 progressBarContainer.appendChild(progressBar);
 
-                videoElement.parentElement.appendChild(imgElement);
-                videoElement.parentElement.appendChild(nameLabel);
-                videoElement.parentElement.appendChild(progressBarContainer);
+                videoElement.parentElement.insertBefore(imgElement, videoElement);
+                videoElement.parentElement.insertBefore(nameLabel, videoElement);
+                videoElement.parentElement.insertBefore(progressBarContainer, videoElement);
                 videoElement.remove();
                 console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
 
@@ -1152,7 +1156,7 @@ async function startup() {
 
             item_w = TopScrollView.clientWidth/visual_pictures_row;
             // item_w = 400;
-            item_h = item_w/16*9;
+            item_h = item_w/4*3;
 
             visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
 
