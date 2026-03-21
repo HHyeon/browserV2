@@ -771,6 +771,7 @@
                     console.log(`zoomPanningStayed exit`);
                     ExitZoomPanning();
                 }
+
             }
 
             // let videozoompanning_mousepos_start = {x:0, y:0};
@@ -830,18 +831,29 @@
                             if(zoomPanningStayed) {
                             }
                             else {
-                                leftmousedowned = false;
-                                            
-                                player_paused_state = false;
-                                player.play();
-                                setLabelText("play");
-                                clearInterval(seeking_labelsetting_handler);
+                                if(leftmousedowned) {
+                                    leftmousedowned = false;
+                                    clearInterval(seeking_labelsetting_handler);
+
+                                    console.log(`${leftmousedownpos}, ${param.x}`);
+
+                                    if(leftmousedownpos == param.x) {
+                                        pauseplay();
+                                    }
+                                    else {
+                                        player_paused_state = false;
+                                        player.play();
+                                        setLabelText("play");
+                                    }
+                                    
+                                }
                             }
 
                             if(mouselongpressedcheckTimer != null) { // cancel longpressed timeout 
                                 clearInterval(mouselongpressedcheckTimer);
                                 mouseLClickShortPressed();
                             }
+                            
                         }
                         break;
                     
