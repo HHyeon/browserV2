@@ -119,6 +119,12 @@ async function refreshinginfinitylist(force=false)
             if (itemElem) {
                 itemElem.setAttribute('data-item-index', idx);
                 TopScrollView.appendChild(itemElem);
+                
+                const imgWithFname = itemElem.querySelector('img[data-fname]');
+                if (imgWithFname) {
+                    thumbnailObserver.observe(imgWithFname);
+                    ThumbnailIntervalManager.setupProgressBar(itemElem, imgWithFname.dataset.fname);
+                }
             }
         }
         
@@ -197,6 +203,12 @@ async function refreshinginfinitylist(force=false)
                     if (itemElem) {
                         itemElem.setAttribute('data-item-index', idx);
                         TopScrollView.appendChild(itemElem);
+                        
+                        const imgWithFname = itemElem.querySelector('img[data-fname]');
+                        if (imgWithFname) {
+                            thumbnailObserver.observe(imgWithFname);
+                            ThumbnailIntervalManager.setupProgressBar(itemElem, imgWithFname.dataset.fname);
+                        }
                     }
                     console.log(`[Refresh] Added item ${idx}`);
                 } else {
@@ -348,6 +360,13 @@ const ThumbnailIntervalManager = {
     activeItems: new Map(),
     errorIcons: new Map(),
 
+    setupProgressBar(itemElem, fname) {
+        const progressBar = itemElem.querySelector('.video-progress-bar');
+        if (progressBar && makeitem_Store[fname]) {
+            makeitem_Store[fname].progressBar = progressBar;
+        }
+    },
+
     showError(fname, imgElement) {
         if (this.errorIcons.has(fname)) return;
         if (!imgElement || !imgElement.parentElement) return;
@@ -457,11 +476,13 @@ const ThumbnailIntervalManager = {
     },
 
     stopAll() {
+        console.log('ALL STOP');
         this.activeItems.clear();
         this.clearErrors();
     },
 
     resumeAll() {
+        console.log('ALL RESUME');
         document.querySelectorAll('img[data-fname]').forEach(img => {
             const fname = img.dataset.fname;
             if (!this.activeItems.has(fname)) {
@@ -859,10 +880,9 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         item_vid = makeitem_Store[fname].item_vid;
         vidpath = makeitem_Store[fname].vidpath;
         need_video_load = makeitem_Store[fname].need_video_load;
+        cacheKey = makeitem_Store[fname].cacheKey || '';
         let hasMp4 = makeitem_Store[fname].hasMp4 || false;
         hasHighImageRatio = makeitem_Store[fname].hasHighImageRatio || false;
-
-        console.log(``)
 
         console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}`);
     }
@@ -946,14 +966,35 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         }
     }
 
-    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; "}}>`;    
     // 🔑 비디오 요소에 메타데이터 속성 추가 (processVideoLoadQueue에서 사용)
     // 주의: IndexedDB에서는 원본 경로(인코딩 X)를 사용
+    const cacheKeyForAttr = parampath + "/" + fname;
+    const imgAttrs = item_vid ? ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"` : '';
+    
+    let videoOverlays = '';
+    if (item_vid && makeitem_stored) {
+        const storedData = makeitem_Store[fname];
+        const currentSeekTime = storedData?.currentSeekTime || 0;
+        const videoDuration = storedData?.videoDuration || 60;
+        const progressPercent = (currentSeekTime / videoDuration) * 100;
+        
+        videoOverlays = `
+            <div class="video-name-label" style="position: absolute; top: 2px; left: 0; right: 0; padding: 2px 4px; font-size: 10px; color: white; background: rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 5; pointer-events: none;">${fname}</div>
+            <div class="video-progress-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.5); z-index: 5; pointer-events: none;">
+                <div class="video-progress-bar" style="height: 100%; width: ${progressPercent}%; background: rgba(0,200,255,0.8); transition: width 0.3s ease;"></div>
+            </div>
+        `;
+    }
+    
+    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; " ${imgAttrs}>`;
+    if (item_vid) {
+        imgelements = `
+            <img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: calc(100% - 16px); top: 16px; object-fit:cover; pointer-events: none;" ${imgAttrs}>
+            ${videoOverlays}
+        `;
+    }
     let cachedAttrs = '';
     if(item_vid) {
-        // 🔑 cacheKey는 원본 경로 (parampath + "/" + fname)
-        // data-cache-key에는 원본 경로를 저장
-        const cacheKeyForAttr = parampath + "/" + fname;
         cachedAttrs = ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"`;
     }
     let videlements = `<video loop muted src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
