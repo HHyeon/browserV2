@@ -881,7 +881,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         vidpath = makeitem_Store[fname].vidpath;
         need_video_load = makeitem_Store[fname].need_video_load;
         cacheKey = makeitem_Store[fname].cacheKey || '';
-        let hasMp4 = makeitem_Store[fname].hasMp4 || false;
+        hasMp4 = makeitem_Store[fname].hasMp4 || false;
         hasHighImageRatio = makeitem_Store[fname].hasHighImageRatio || false;
 
         console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}`);
@@ -997,7 +997,9 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     if(item_vid) {
         cachedAttrs = ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"`;
     }
-    let videlements = `<video loop muted src=${vidpath} style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
+    let videlements = `<video muted src=${vidpath} preload="none" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
+
+    // let videlements = `<div style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></div>`;
     
     let layerTextStyle = 'box-sizing:border-box';
     if(item_vid) {
