@@ -565,6 +565,7 @@ function processVideoLoadQueue() {
 
             if (!imagedatabase64 || imagedatabase64.length < 100) {
                 console.error(`[Cache] Invalid image data for ${videoInfo.fname}: ${imagedatabase64?.length || 0} bytes`);
+								console.log(`imagedatabase64 : ${imagedatabase64}`);
                 return;
             }
 
@@ -1223,7 +1224,7 @@ async function startup() {
 
             // console.log(`dirlist - ${JSON.stringify(dirlist)}`);
 
-			refreshinginfinitylist();
+						Reload_View();
 			
         }
         else {
@@ -1268,6 +1269,18 @@ let typingmodecmd = false;
 let typingmode = false;
 let typinginputstr = '';
 let typinginputsubmit = '';
+
+
+function Reload_View() {
+	// 캐시 초기화: makeitem_Store를 비워서 모든 항목이 다시 로드되도록 함
+	clearAllThumbnailIntervals();
+	makeitem_Store = {};
+	// 비디오 로드 큐도 초기화 (진행 중인 작업은 계속 진행되지만, 큐는 새로 시작)
+	videoLoadQueue = [];
+	// 강제 새로고침: 모든 아이템을 다시 렌더링하고 비디오 프레임을 새로 추출
+	refreshinginfinitylist(true);
+}
+
 
 document.addEventListener('keydown', (e) => {
     
@@ -1369,13 +1382,8 @@ document.addEventListener('keydown', (e) => {
     else if(e.key == '\\')
     {
         console.log('[Cache] Force refresh: Clearing cache and reloading');
-        // 캐시 초기화: makeitem_Store를 비워서 모든 항목이 다시 로드되도록 함
-        clearAllThumbnailIntervals();
-        makeitem_Store = {};
-        // 비디오 로드 큐도 초기화 (진행 중인 작업은 계속 진행되지만, 큐는 새로 시작)
-        videoLoadQueue = [];
-        // 강제 새로고침: 모든 아이템을 다시 렌더링하고 비디오 프레임을 새로 추출
-        refreshinginfinitylist(true);
+				
+				Reload_View();
     }
     else if(e.key == 'Backspace')
     {
