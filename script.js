@@ -1214,9 +1214,16 @@ async function startup() {
                 dirlist = shuffleWithSeed(dirlist, Math.random()*0xFFFFFFFF);
             }
             else if(ordertype == 5)
-						{
-							
-						}
+            {
+                const ratingPromises = dirlist.map(async (item) => {
+                    item.rating = await getRating(item.fname);
+                    return item;
+                });
+                await Promise.all(ratingPromises);
+                const randomSeed = Math.random() * 0xFFFFFFFF;
+                dirlist = shuffleWithSeed(dirlist, randomSeed);
+                dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+            }
             else
             {
                 console.log(`ordertype unknown !!! ${ordertype}`);
@@ -1251,10 +1258,9 @@ async function startup() {
                 });
             }
 
-            item_w = (TopScrollView.clientWidth/visual_pictures_row);
+            item_w = (window.innerWidth/visual_pictures_row)-5;
             // item_w = 400;
             item_h = item_w/4*3;
-
             visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
 
             // console.log(`visual_pictures_row ${visual_pictures_row}`);
