@@ -131,67 +131,54 @@
 
         .sidebar {
         position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-
-        width: 5%;
-        background: rgba(0, 155, 255, 0.3);
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 155, 255, 0.9);
         color: white;
         padding: 20px;
-                
-        transform: translateX(-100%);     /* 기본 숨김 */
-        transition: transform 0.25s ease;
+        border-radius: 16px;
         z-index: 1000;
-        
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
         display: flex;
-        align-items: center;             /* 세로 중앙 */
-        justify-content: center;         /* 가로 중앙 */
+        align-items: center;
+        justify-content: center;
+        }
         
+        .sidebar.visible {
+        opacity: 1;
+        pointer-events: auto;
         }
         
         .sidebar-buttons {
         display: flex;
-        flex-direction: column;
-        gap: 16px;                       /* 버튼 간격 */
+        flex-direction: row;
+        gap: 16px;
         }
-
+        
         .sidebar-buttons button {
-        width: 50pt;
-        height: 50pt;
-
+        width: 60pt;
+        height: 60pt;
         border: none;
         border-radius: 12px;
         background: #334155;
         color: white;
         font-size: 24pt;
         cursor: pointer;
- 
-        align-items: center;             /* 세로 중앙 */
-        justify-content: center;         /* 가로 중앙 */
-
+        align-items: center;
+        justify-content: center;
         transition: background 0.2s, transform 0.15s;
         }
-
+        
         .sidebar-buttons button:hover {
         background: rgba(0, 155, 255, 0.5);
         transform: scale(1.08);
         }
 
         .sidebar-trigger {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-
-        width: 5%;
-        padding: 20px;
-        z-index: 999;
-        }
-
-        .sidebar-trigger:hover + .sidebar,
-        .sidebar:hover {
-        transform: translateX(0);
+        display: none;
         }
 
     </style>
@@ -209,9 +196,7 @@
 
     <div class="layout">
 
-        <div class="sidebar-trigger"></div>
-
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             
         <div class="sidebar-buttons">
             <button id="btn-open-explorer">📁</button>
@@ -219,6 +204,7 @@
             <button onclick="setordertype(2)">🔤</button>
             <button onclick="setordertype(3)">📅</button>
             <button onclick="setordertype(4)">♻️</button>
+            <button onclick="setordertype(5)">⭐</button>
         </div>
         
         </aside>

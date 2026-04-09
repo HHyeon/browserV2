@@ -1213,6 +1213,10 @@ async function startup() {
             {
                 dirlist = shuffleWithSeed(dirlist, Math.random()*0xFFFFFFFF);
             }
+            else if(ordertype == 5)
+						{
+							
+						}
             else
             {
                 console.log(`ordertype unknown !!! ${ordertype}`);
@@ -1247,7 +1251,7 @@ async function startup() {
                 });
             }
 
-            item_w = TopScrollView.clientWidth/visual_pictures_row;
+            item_w = (TopScrollView.clientWidth/visual_pictures_row);
             // item_w = 400;
             item_h = item_w/4*3;
 
@@ -1289,7 +1293,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function setordertype(type)
 {
-    if(type >= 1 && type <= 4)
+    if(type >= 1 && type <= 5)
     {
         localStorage.setItem('listordertype', type); // time
 
@@ -1353,6 +1357,14 @@ function Reload_View() {
 
 document.addEventListener('keydown', (e) => {
     
+    // Shift 키로 sidebar 토글
+    if (e.key === 'Shift') {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+            sidebar.classList.toggle('visible');
+        }
+    }
+
     // console.log(e.key);
 
     if(typingmode || typingmodecmd)
