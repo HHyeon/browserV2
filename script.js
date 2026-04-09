@@ -55,6 +55,33 @@ async function dirseek(param) {
     }
 }
 
+async function getRating(folderName) {
+    try {
+        const res = await fetch(`rate.php?name=${encodeURIComponent(folderName)}`);
+        const json = await res.json();
+        return json.ret ? json.value : 0;
+    } catch (e) {
+        console.error('getRating error', e);
+        return 0;
+    }
+}
+
+async function setRating(folderName, value) {
+    try {
+        const res = await fetch('rate.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, value: value })
+        });
+        const json = await res.json();
+				console.log(`${json}`);
+        return json.ret;
+    } catch (e) {
+        console.error('setRating error', e);
+        return false;
+    }
+}
+
 
 let lastVisibleStart = 0;  // 이전 렌더링의 시작 인덱스
 let lastVisibleEnd = 0;    // 이전 렌더링의 끝 인덱스
@@ -861,6 +888,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         }
         
         // 🔑 makeitem_Store에 cacheKey도 저장 (processVideoLoadQueue에서 사용)
+        const ratingValue = await getRating(fname);
         makeitem_Store[fname] = {
             fname: fname,
             item_enterable: item_enterable,
@@ -871,7 +899,8 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             vidpath: vidpath,
             cacheKey: cacheKey,  // ✅ 추가: IndexedDB 캐시 키
             hasMp4: hasMp4 || false,  // 추가: MP4 파일 존재 여부
-            hasHighImageRatio: hasHighImageRatio || false  // 추가: 이미지 파일 80% 이상 여부
+            hasHighImageRatio: hasHighImageRatio || false,  // 추가: 이미지 파일 80% 이상 여부
+            rating: ratingValue  // 추가: rating 값
         };
     }
     else {
@@ -884,8 +913,9 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         cacheKey = makeitem_Store[fname].cacheKey || '';
         hasMp4 = makeitem_Store[fname].hasMp4 || false;
         hasHighImageRatio = makeitem_Store[fname].hasHighImageRatio || false;
+        let rating = makeitem_Store[fname].rating ?? 0;
 
-        console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}`);
+        console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}, rating: ${rating}`);
     }
 
     let linkelemnts;
@@ -950,8 +980,17 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             // </div>`;
         }
 
+        const currentRating = makeitem_stored?.rating ?? (await getRating(fname));
+        const ratingBadge = `
+        <div class="rating-container" data-rating-fname="${fname}">
+            <div class="rating-btn" onclick="onRatingUp('${fname}')">▲</div>
+            <div class="rating-value">${currentRating}</div>
+            <div class="rating-btn" onclick="onRatingDown('${fname}')">▼</div>
+        </div>
+        `;
         
         linkelemnts = `
+        ${ratingBadge}
         <div class="badge-container">
             ${playvidBadge}
             ${imageviewBadge}
@@ -1263,6 +1302,36 @@ function setordertype(type)
 function commandtyped(cmd)
 {
     console.log(`cmd - ${cmd}`);
+}
+
+function onRatingUp(fname) {
+    (async () => {
+        const currentRating = makeitem_Store[fname]?.rating ?? 0;
+        const newRating = currentRating + 1;
+        const success = await setRating(fname, newRating);
+        if (success) {
+            makeitem_Store[fname].rating = newRating;
+            document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
+                el.textContent = newRating;
+            });
+        }
+        console.log(`Rating UP: ${fname} -> ${newRating}`);
+    })();
+}
+
+function onRatingDown(fname) {
+    (async () => {
+        const currentRating = makeitem_Store[fname]?.rating ?? 0;
+        const newRating = currentRating - 1;
+        const success = await setRating(fname, newRating);
+        if (success) {
+            makeitem_Store[fname].rating = newRating;
+            document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
+                el.textContent = newRating;
+            });
+        }
+        console.log(`Rating DOWN: ${fname} -> ${newRating}`);
+    })();
 }
 
 let typingmodecmd = false;
