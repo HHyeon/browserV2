@@ -1215,14 +1215,6 @@ async function startup() {
             }
             else if(ordertype == 5)
             {
-                const ratingPromises = dirlist.map(async (item) => {
-                    item.rating = await getRating(item.fname);
-                    return item;
-                });
-                await Promise.all(ratingPromises);
-                const randomSeed = Math.random() * 0xFFFFFFFF;
-                dirlist = shuffleWithSeed(dirlist, randomSeed);
-                dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
             }
             else
             {
@@ -1244,6 +1236,22 @@ async function startup() {
             });
             
             dirlist.sort((a, b) => Number(b.text.endsWith(".mp4")) - Number(a.text.endsWith(".mp4")));
+
+            
+
+
+            const ratingPromises = dirlist.map(async (item) => {
+                item.rating = await getRating(item.fname);
+                return item;
+            });
+            await Promise.all(ratingPromises);
+            // const randomSeed = Math.random() * 0xFFFFFFFF;
+            // dirlist = shuffleWithSeed(dirlist, randomSeed);
+            dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+
+
+            
+            
 
             let imgfiles = dirlist.filter(x => isImageExt(x.fname));
     
@@ -1273,7 +1281,7 @@ async function startup() {
 
             // console.log(`dirlist - ${JSON.stringify(dirlist)}`);
 
-						Reload_View();
+            Reload_View();
 			
         }
         else {

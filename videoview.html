@@ -296,10 +296,19 @@
             let startX = 0, startY = 0;
             let currTranslateX = 0, currTranslateY = 0;
 
-            function ExitZoomPanning() {
+            function ExitZoomPanning(screenfull = false) {
 
-                PANNINGZOOM_VIEW_SCALE_DEFAULT = PANNINGZOOM_VIEW_SCALE = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
-                PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = PANNINGZOOM_VIEW_SCALE;
+                    const resetscale = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
+                    
+                // if(screenfull) {
+                //     const resetscale = Math.min(window.innerWidth / player.videoHeight, window.innerHeight / player.videoHeight);
+                // }
+                // else {
+                //     const resetscale = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
+                // }
+
+                PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = PANNINGZOOM_VIEW_SCALE_DEFAULT = PANNINGZOOM_VIEW_SCALE = resetscale
+
                 zoomPanningStayed = false;
                 player.style.scale = PANNINGZOOM_VIEW_SCALE;
                 console.log(`initial PANNINGZOOM_VIEW_SCALE - ${PANNINGZOOM_VIEW_SCALE}`);
@@ -593,6 +602,9 @@
                     break;
 
                     // case '.':
+
+                    zoomPanningStayed = false;
+                    ExitZoomPanning(true);
                     //     if(player.style.objectFit == 'contain')
                     //     {
                     //         setLabelText("Fit To Window");
