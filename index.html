@@ -177,6 +177,11 @@
         transform: scale(1.08);
         }
 
+        .sidebar-buttons button.active {
+        background: rgba(255, 155, 0, 0.8);
+        box-shadow: 0 0 10px rgba(255, 155, 0, 0.5);
+        }
+
         .sidebar-trigger {
         display: none;
         }
@@ -204,7 +209,7 @@
             <button onclick="setordertype(2)">🔤</button>
             <button onclick="setordertype(3)">📅</button>
             <button onclick="setordertype(4)">♻️</button>
-            <button onclick="setordertype(5)">⭐</button>
+            <button id="btn-rating-toggle" onclick="setRatingOrderToggle()">⭐</button>
         </div>
         
         </aside>

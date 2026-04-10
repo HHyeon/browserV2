@@ -1138,6 +1138,11 @@ async function startup() {
     }
 
     startupprocessing = true;
+		
+		const sidebar = document.getElementById('sidebar');
+		if (sidebar) {
+				sidebar.classList.remove('visible');
+		}
 
     let ordertype = localStorage.getItem('listordertype');
 
@@ -1145,8 +1150,33 @@ async function startup() {
     {
         ordertype = 1;
     }
-
+		
     console.log(`ordertype - ${ordertype}`);
+		
+		ratingordertoggleState = localStorage.getItem('ratingordertoggle');
+		if(ratingordertoggleState == null) ratingordertoggleState = false;
+		
+		if(ratingordertoggleState == 'true') ratingordertoggleState = true;
+		else if(ratingordertoggleState == 'false') ratingordertoggleState = false;
+		
+		console.log(`ratingordertoggleState: ${ratingordertoggleState}`);
+		
+		const btn = document.getElementById('btn-rating-toggle');
+		if(btn) {
+			if(ratingordertoggleState)
+				btn.classList.add('active');
+			else
+				btn.classList.remove('active');
+		}
+		
+
+		const ratingBtn = document.getElementById('btn-rating-toggle');
+		if(ratingBtn) {
+			if(ratingordertoggleState === true)
+				ratingBtn.classList.add('active');
+			else
+				ratingBtn.classList.remove('active');
+		}
 
     dirlist = [];
     clearAllThumbnailIntervals();
@@ -1213,12 +1243,21 @@ async function startup() {
             {
                 dirlist = shuffleWithSeed(dirlist, Math.random()*0xFFFFFFFF);
             }
-            else if(ordertype == 5)
-            {
-            }
             else
             {
                 console.log(`ordertype unknown !!! ${ordertype}`);
+            }
+
+            if(ratingordertoggleState === true)
+            {
+                const ratingPromises = dirlist.map(async (item) => {
+                    item.rating = await getRating(item.fname);
+                    return item;
+                });
+                await Promise.all(ratingPromises);
+                const randomSeed = Math.random() * 0xFFFFFFFF;
+                dirlist = shuffleWithSeed(dirlist, randomSeed);
+                dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
             }
             
             dirlist = dirlist.filter(item => {
@@ -1236,22 +1275,6 @@ async function startup() {
             });
             
             dirlist.sort((a, b) => Number(b.text.endsWith(".mp4")) - Number(a.text.endsWith(".mp4")));
-
-            
-
-
-            const ratingPromises = dirlist.map(async (item) => {
-                item.rating = await getRating(item.fname);
-                return item;
-            });
-            await Promise.all(ratingPromises);
-            // const randomSeed = Math.random() * 0xFFFFFFFF;
-            // dirlist = shuffleWithSeed(dirlist, randomSeed);
-            dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-
-
-            
-            
 
             let imgfiles = dirlist.filter(x => isImageExt(x.fname));
     
@@ -1307,13 +1330,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function setordertype(type)
 {
-    if(type >= 1 && type <= 5)
+    if(type >= 1 && type <= 4)
     {
         localStorage.setItem('listordertype', type); // time
 
         console.log(`startup with setordertype - ${type}`);
         startup();
     }
+}
+
+
+let ratingordertoggleState = false;
+
+function setRatingOrderToggle()
+{
+	ratingordertoggleState = !ratingordertoggleState;
+	
+	localStorage.setItem('ratingordertoggle', ratingordertoggleState);
+	console.log(`ratingordertoggleState - ${ratingordertoggleState}`);
+
+	startup();
 }
 
 
