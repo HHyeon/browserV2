@@ -1153,30 +1153,22 @@ async function startup() {
 		
     console.log(`ordertype - ${ordertype}`);
 		
-		ratingordertoggleState = localStorage.getItem('ratingordertoggle');
-		if(ratingordertoggleState == null) ratingordertoggleState = false;
-		
-		if(ratingordertoggleState == 'true') ratingordertoggleState = true;
-		else if(ratingordertoggleState == 'false') ratingordertoggleState = false;
-		
-		console.log(`ratingordertoggleState: ${ratingordertoggleState}`);
-		
-		const btn = document.getElementById('btn-rating-toggle');
-		if(btn) {
-			if(ratingordertoggleState)
-				btn.classList.add('active');
-			else
-				btn.classList.remove('active');
-		}
-		
+    ratingordertoggleState = localStorage.getItem('ratingordertoggle');
+    if(ratingordertoggleState == null) ratingordertoggleState = false;
+    
+    if(ratingordertoggleState == 'true') ratingordertoggleState = true;
+    else if(ratingordertoggleState == 'false') ratingordertoggleState = false;
+    
+    console.log(`ratingordertoggleState: ${ratingordertoggleState}`);
+    
 
-		const ratingBtn = document.getElementById('btn-rating-toggle');
-		if(ratingBtn) {
-			if(ratingordertoggleState === true)
-				ratingBtn.classList.add('active');
-			else
-				ratingBtn.classList.remove('active');
-		}
+    const ratingBtn = document.getElementById('btn-rating-toggle');
+    if(ratingBtn) {
+        if(ratingordertoggleState === true)
+            ratingBtn.classList.add('active');
+        else
+            ratingBtn.classList.remove('active');
+    }
 
     dirlist = [];
     clearAllThumbnailIntervals();
@@ -1225,6 +1217,25 @@ async function startup() {
         }
 
         if(dirlist.length > 0) {
+
+            orderbtns = {
+                1: document.getElementById('btn-order1'),
+                2: document.getElementById('btn-order2'),
+                3: document.getElementById('btn-order3'),
+                4: document.getElementById('btn-order4')
+            }
+
+            Object.values(orderbtns).forEach(btn => {
+                if(btn) btn.classList.remove('active');
+            });
+            
+            for(let i=1;i<=4;i++) {
+                if(i == ordertype) {
+                    const btn = orderbtns[i];
+                    if(btn) btn.classList.add('active');
+                }
+            }
+
             if(ordertype == 1)
             {
                 dirlist.sort((a,b) => { return b.time - a.time; });
