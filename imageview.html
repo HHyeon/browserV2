@@ -50,6 +50,46 @@
             box-sizing: border-box;
         }
         
+        #progress-panel {
+            position: fixed;
+            bottom: 5vh;
+            left: calc(100vw / 3);
+            width: calc(100vw / 3);
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            padding: 12px 16px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+
+        #progress-time {
+            text-align: center;
+            font-size: 2.5vmin;
+            margin-bottom: 10px;
+        }
+
+        #progress-bar-container {
+            width: 100%;
+            height: 3vmin;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+        }
+
+        #progress-bar {
+            height: 100%;
+            background-color: rgba(100, 180, 255, 0.9);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.1s linear;
+            pointer-events: none;
+        }
+        
     </style>
 </head>
 <body draggable="false">
@@ -58,6 +98,17 @@
 
     <div id="viewbox" style="visibility:hidden;">
         <div id="viewbox-zoom"></div>
+    </div>
+
+    <div id="progress-panel">
+        <div id="progress-time">
+            <span id="progress-current">1</span>
+            <span id="progress-separator"> / </span>
+            <span id="progress-total">1</span>
+        </div>
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
     </div>
 
     <script>
@@ -116,10 +167,6 @@
             zoomBox.style.width  = (wImg    / viewer.naturalWidth * 100) + '%';
             zoomBox.style.height = (hImg    / viewer.naturalHeight * 100) + '%';
         }
-
-        // document.addEventListener('DOMContentLoaded', () => {
-        //     updateViewbox();
-        // });
 
         function ZoomInOut(zoom, mX, mY) {
             let exitzoom = false;
@@ -201,12 +248,6 @@
             }
         }
 
-        function isImageExt(filename) {
-            let arg = filename.toLowerCase();
-            if(arg.endsWith('jpeg') || arg.endsWith('jpg') || arg.endsWith('png')) return true;
-            else return false;
-        }
-
         let imagesDirList = [];
         let imagesDirList_jumpidx=0;
         let currentimageDirListname;
@@ -230,40 +271,32 @@
 
                 // console.log(dirlist);
 
-                dirlist.forEach(async each => {
-                    // console.log(each.d);
-
+                for (const each of dirlist) {
                     const belowdirjsondata = await dirseek(`${upperdirpath}/${each.d}`);
 
                     if(belowdirjsondata.ret) {
-                        let dirbelowimgs = [];
                         let imageCount = 0;
                 
-                        belowdirjsondata["data"].forEach(below_each => {
+                        for (const below_each of belowdirjsondata["data"]) {
                             const name = below_each["d"];
-                            const time = below_each["t"];
                             
-                            let fnameext = name.substring(name.lastIndexOf('.')+1);
-                            
-                            fnameext = fnameext.toLowerCase();
-                            
-                            if(isImageExt(fnameext)) {
-                                dirbelowimgs.push(name);
+                            if(isImage(name)) {
                                 imageCount++;
                             }
-                        });
+                        }
                 
-                        let totalFiles = jsondata["data"].length;
-
-                        // console.log(`${each.d} -> ${totalFiles}`);
-
-                        let imageRatio = totalFiles > 0 ? imageCount / totalFiles : 0;
-                        let hasHighImageRatio = imageRatio >= 0.9;
+                        const totalFiles = jsondata["data"].length;
+                        const imageRatio = totalFiles > 0 ? imageCount / totalFiles : 0;
+                        const hasHighImageRatio = imageRatio >= 0.9;
 
                         if(hasHighImageRatio) 
                             imagesDirList.push(each.d);
+                        // else
+                        // {
+                        //     console.log(`${each.d} is not img dirs`);
+                        // }
                     }
-                });
+                }
 
             }
 
@@ -290,9 +323,9 @@
             }
 
             document.title = images[idx];
-            // 정보 표시 업데이트
             const info = document.getElementById('info');
             info.textContent = `${idx + 1}/${images.length} ${images[idx]}`;
+            updateProgressPanel();
         }
 
         function nextImage() {
@@ -308,6 +341,58 @@
 
         let zoom_moveing_scale_x = 1;
         let zoom_moveing_scale_y = 1;
+
+        let progressHideTimer = null;
+        const progressPanel = document.getElementById('progress-panel');
+        const progressBar = document.getElementById('progress-bar');
+        const progressCurrent = document.getElementById('progress-current');
+        const progressTotal = document.getElementById('progress-total');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+
+        function updateProgressPanel() {
+            if(images.length === 0) return;
+            const current = idx + 1;
+            const total = images.length;
+            const percent = (current / total) * 100;
+            
+            progressBar.style.width = percent + '%';
+            progressCurrent.textContent = current;
+            progressTotal.textContent = total;
+        }
+
+        function showProgressPanel(keepVisible = false) {
+            if(progressHideTimer) clearTimeout(progressHideTimer);
+            progressPanel.style.opacity = '1';
+            progressPanel.style.visibility = 'visible';
+            if(!keepVisible) {
+                progressHideTimer = setTimeout(() => {
+                    progressPanel.style.opacity = '0';
+                    progressPanel.style.visibility = 'hidden';
+                    progressHideTimer = null;
+                }, 500);
+            } else {
+                progressHideTimer = null;
+            }
+        }
+
+        function hideProgressPanel() {
+            if(progressHideTimer) clearTimeout(progressHideTimer);
+            progressPanel.style.opacity = '0';
+            progressPanel.style.visibility = 'hidden';
+            progressHideTimer = null;
+        }
+
+        progressBarContainer.addEventListener('click', (e) => {
+            const rect = progressBarContainer.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percent = clickX / rect.width;
+            const targetIdx = Math.floor(images.length * percent);
+            showImage(targetIdx);
+        });
+
+        progressBarContainer.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
 
         function onImageLoaded() {
             console.log(`image : ${viewerElem.naturalWidth}, ${viewerElem.naturalHeight}` + 
@@ -352,14 +437,9 @@
 
         let zoomPanningStayed = false;
         let mouselongpressedcheckTimer = null;
-        let currently_longpressed = false;
 
         function mouseLClickLongPressed() {
             mouselongpressedcheckTimer = null;
-            console.log("long pressed !");
-
-            currently_longpressed = true;
-
         }
 
         function mouseLClickShortPressed() {
@@ -401,16 +481,13 @@
         }
 
         function zoomPanning_start(mX, mY) {
-            let mousexinmgs_beforezoom = mX - viewerElem.getBoundingClientRect().left;
-            let mouseyinmgs_beforezoom = mY - viewerElem.getBoundingClientRect().top;
-            console.log(`mouse in image coords: ${mousexinmgs_beforezoom}, ${mouseyinmgs_beforezoom}`);
+            const mousexinmgs_beforezoom = mX - viewerElem.getBoundingClientRect().left;
+            const mouseyinmgs_beforezoom = mY - viewerElem.getBoundingClientRect().top;
 
             let mousexinmgs_realimg = (mousexinmgs_beforezoom / viewerElem.getBoundingClientRect().width) * viewerElem.naturalWidth;
             let mouseyinmgs_realimg = (mouseyinmgs_beforezoom / viewerElem.getBoundingClientRect().height) * viewerElem.naturalHeight;
-            console.log(`mouse in image coords after zoom: ${mousexinmgs_realimg}, ${mouseyinmgs_realimg}`);
-            let mouseXfromcenter = mX - window.innerWidth/2;
-            let mouseYfromcenter = mY - window.innerHeight/2;
-            console.log(`mouse from center: ${mouseXfromcenter}, ${mouseYfromcenter}`);
+            const mouseXfromcenter = mX - window.innerWidth/2;
+            const mouseYfromcenter = mY - window.innerHeight/2;
             
             mousexinmgs_realimg -= mouseXfromcenter / PANNINGZOOM_VIEW_SCALE;
             mouseyinmgs_realimg -= mouseYfromcenter / PANNINGZOOM_VIEW_SCALE;
@@ -444,10 +521,7 @@
                     
 
         document.addEventListener('mousedown', e => {
-            e.stopPropagation();
-            // console.log('mouse down', e.clientX, e.clientY);
             if(e.button == 1) {
-                // middle button: toggle fullscreen
                 if (!document.fullscreenElement) {
                     document.documentElement.requestFullscreen();
                 } else {
@@ -455,23 +529,10 @@
                 }
             }
             else if(e.button === 2) {
-                // // right button: next if right half, prev if left half
-                // const centerX = window.innerWidth / 2;
-                // if(e.clientX > centerX) {
-                //     nextImage(); // right side -> next
-                // } else {
-                //     showImage(idx-1); // left side -> previous
-                // }
-
-                // right button: start drag detection
                 rightDragStartX = e.clientX;
                 isRightDragging = true;
-                // do NOT trigger navigation here; will decide on mouseup or drag
-            
-                // console.log('right drag start', rightDragStartX);
             }
             else if(e.button === 0) {
-                // left button: start zoom/pan
                 mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
                 
                 MouseL_Dragging = true;
@@ -506,10 +567,9 @@
             if(isRightDragging) {
                 const deltaX = e.clientX - rightDragStartX;
                 const absDelta = Math.abs(deltaX);
-                // console.log(`absDelta: ${absDelta}, threshold: ${RIGHT_DRAG_THRESHOLD}, rightDragStartX: ${rightDragStartX}`);
                 if(absDelta >= RIGHT_DRAG_THRESHOLD) {
                     const steps = Math.floor(absDelta / RIGHT_DRAG_THRESHOLD);
-                    const dir = deltaX > 0 ? 1 : -1;   // 1 → next, -1 → prev
+                    const dir = deltaX > 0 ? 1 : -1;
                     for(let i = 0; i < steps; i++) {
                         if(dir > 0) {
                             nextImage();
@@ -517,9 +577,11 @@
                             showImage(idx-1);
                         }
                     }
-                    // advance the reference point by the used distance
                     rightDragStartX = e.clientX;
                 }
+            }
+            else {
+                showProgressPanel();
             }
             
         });
@@ -547,10 +609,8 @@
 
             if(e.button === 0) {
 
-                currently_longpressed = false;
-
                 if(mouselongpressedcheckTimer != null) { // cancel longpressed timeout 
-                    clearInterval(mouselongpressedcheckTimer);
+                    clearTimeout(mouselongpressedcheckTimer);
                     mouseLClickShortPressed();
                 }
 
@@ -580,14 +640,8 @@
                     if(absDelta < RIGHT_DRAG_THRESHOLD) {
                         if(e.clientX > clickBorder) {
                             nextImage();
-                            // console.log('right click: next');
                         } else if(e.clientX < clickBorder) {
                             showImage(idx-1);
-                            // console.log('right click: previous');
-                        }
-                        else
-                        {
-                            // console.log('right click: ignored (center area)');
                         }
                     }
                     isRightDragging = false;
@@ -603,6 +657,7 @@
             const currentimgDirname = currentimageDirListname.substring(currentimageDirListname.lastIndexOf('/')+1);
             let nextimgDirname = null;
             let randomimg = false;
+
             while(true) {
 
                 if(type == 0) //next 
