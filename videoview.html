@@ -298,7 +298,7 @@
 
             function ExitZoomPanning(screenfull = false) {
 
-                    const resetscale = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
+                const resetscale = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
                     
                 // if(screenfull) {
                 //     const resetscale = Math.min(window.innerWidth / player.videoHeight, window.innerHeight / player.videoHeight);
@@ -307,7 +307,7 @@
                 //     const resetscale = Math.min(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
                 // }
 
-                PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = PANNINGZOOM_VIEW_SCALE_DEFAULT = PANNINGZOOM_VIEW_SCALE = resetscale
+                PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = PANNINGZOOM_VIEW_SCALE_DEFAULT = PANNINGZOOM_VIEW_SCALE = resetscale;
 
                 zoomPanningStayed = false;
                 player.style.scale = PANNINGZOOM_VIEW_SCALE;
@@ -318,6 +318,18 @@
                 player.style.transform = `translate(${currTranslateX}px, ${currTranslateY}px)`;
                 
                 zoomBoxview.style.visibility = 'hidden';
+            }
+
+            function ToggleFullZoomPanning() {
+                if(zoomPanningStayed) {
+                    ExitZoomPanning();
+                }
+                else {
+                    zoomPanningStayed = true;
+                    const resetscale = Math.max(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
+                    PANNINGZOOM_VIEW_SCALE = resetscale;
+                    zoomPanning_Update();
+                }
             }
 
             window.addEventListener("resize", () => {
@@ -334,8 +346,8 @@
 
                     zoomPanningStayed = true;
 
-                    if(PANNINGZOOM_VIEW_SCALE > PANNINGZOOM_VIEW_SCALE_PIXCELMATCH * 3) {
-                        PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH * 3;
+                    if(PANNINGZOOM_VIEW_SCALE > PANNINGZOOM_VIEW_SCALE_PIXCELMATCH * 5) {
+                        PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH * 5;
                     }
                 }
                 else  {
@@ -601,22 +613,11 @@
                         numberpadseeking(Number(param.key));
                     break;
 
-                    // case '.':
+                    case '.':
+                        
+                        ToggleFullZoomPanning();
 
-                    zoomPanningStayed = false;
-                    ExitZoomPanning(true);
-                    //     if(player.style.objectFit == 'contain')
-                    //     {
-                    //         setLabelText("Fit To Window");
-                    //         player.style.objectFit='cover';
-                    //     }
-                    //     else
-                    //     {
-                    //         setLabelText("Fit To Video");
-                    //         player.style.objectFit='contain';
-                    //     }
-                            
-                    //     break;
+                        break;
                     case ' ':
                         pauseplay();
                         break;

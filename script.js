@@ -136,8 +136,8 @@ async function refreshinginfinitylist(force=false)
             if(idx >= dirlist.length) break;
             
             const dirlist_item = dirlist[idx];
-            const pos_x = (item_w + 1) * (i % visual_pictures_row);
-            const pos_y = (item_h + 1) * (Math.floor(i / visual_pictures_row) + scrolleditemidx);
+            const pos_x = (item_w) * (i % visual_pictures_row);
+            const pos_y = (item_h) * (Math.floor(i / visual_pictures_row) + scrolleditemidx);
             
             const html = await makeitem(item_w, item_h, pos_x, pos_y, dirlist_item.fname, dirlist_item.text, force);
             const wrapper = document.createElement('div');
@@ -217,8 +217,8 @@ async function refreshinginfinitylist(force=false)
                 const dirlist_item = dirlist[idx];
                 const row = Math.floor(idx / visual_pictures_row);
                 const col = idx % visual_pictures_row;
-                const pos_x = (item_w + 1) * col;
-                const pos_y = (item_h + 1) * row;
+                const pos_x = (item_w) * col;
+                const pos_y = (item_h) * row;
                 
                 // skip if already present (prevents duplicate overlap)
                 // force=true 시에는 무시하고 다시 만들기
@@ -1300,12 +1300,16 @@ async function startup() {
                 });
             }
 
-            item_w = (window.innerWidth/visual_pictures_row)-5;
+            visual_pictures_row = Math.round(window.innerWidth / 400);
+            if(visual_pictures_row == 0) visual_pictures_row = 1;
+            if(visual_pictures_row > 4) visual_pictures_row = 4;
+
+            item_w = ((window.innerWidth-20)/visual_pictures_row);
             // item_w = 400;
             item_h = item_w/4*3;
             visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
 
-            // console.log(`visual_pictures_row ${visual_pictures_row}`);
+            console.log(`visual_pictures_row ${visual_pictures_row}`);
             // console.log(`visual_pictures_col ${visual_pictures_col}`);
             
             if(dirlist.length > 0) {
