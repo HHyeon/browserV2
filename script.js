@@ -823,7 +823,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                         dirbelowimgs.push(name);
                         imageCount++;
                     }
-                    if(fnameext == 'mp4') hasMp4 = true;
+                    if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') hasMp4 = true;
 
                 })
         
@@ -1280,12 +1280,12 @@ async function startup() {
                         text.endsWith(".jpg") ||
                         text.endsWith(".jpeg") ||
                         text.endsWith(".sh")
-                    ) || text.endsWith(".mp4")
+                    ) || text.endsWith(".mp4") || text.endsWith(".mov") || text.endsWith(".mkv")
                     // || !hasExt
                 );
             });
             
-            dirlist.sort((a, b) => Number(b.text.endsWith(".mp4")) - Number(a.text.endsWith(".mp4")));
+            dirlist.sort((a, b) => Number(b.text.endsWith(".mp4") || b.text.endsWith(".mov") || b.text.endsWith(".mkv")) - Number(a.text.endsWith(".mp4") || a.text.endsWith(".mov") || a.text.endsWith(".mkv")));
 
             let imgfiles = dirlist.filter(x => isImageExt(x.fname));
     
