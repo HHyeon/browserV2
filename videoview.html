@@ -100,11 +100,28 @@
                 transition: width 0.1s linear;
                 pointer-events: none;
             }
+
+            #progress-link {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                font-size: 1.2vmin;
+                color: rgba(255, 255, 255, 0.7);
+                text-decoration: none;
+                padding: 2px 6px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border-radius: 3px;
+                pointer-events: auto;
+            }
+
+            #progress-link:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
             
 
         </style>
     </head>
-    <body draggable="false" oncontextmenu="return false">
+    <body draggable="false" oncontextmenu="return true">
 
         <div draggable="false" class="container">
             <video id="player" buffered autoplay></video>
@@ -113,6 +130,7 @@
         </div>
 
         <div id="progress-panel">
+            <a id="progress-link" href="#" target="_blank">Link</a>
             <div id="progress-time">
                 <span id="progress-current">00:00</span>
                 <span id="progress-separator"> / </span>
@@ -362,22 +380,26 @@
                 zoomBoxview.style.visibility = 'hidden';
             }
 
+            function FullZoomPanning() {
+                zoomPanningStayed = true;
+                const resetscale = Math.max(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
+                PANNINGZOOM_VIEW_SCALE = resetscale;
+                zoomPanning_Update();
+            }
+
             function ToggleFullZoomPanning() {
-                // if(zoomPanningStayed) {
-                //     ExitZoomPanning();
-                // }
-                // else 
-                {
-                    zoomPanningStayed = true;
-                    const resetscale = Math.max(window.innerWidth / player.videoWidth, window.innerHeight / player.videoHeight);
-                    PANNINGZOOM_VIEW_SCALE = resetscale;
-                    zoomPanning_Update();
+
+                zoomPanningStayed = !zoomPanningStayed;
+                if(zoomPanningStayed) {
+                    FullZoomPanning();
+                }
+                else {
+                    ExitZoomPanning();
                 }
             }
 
             window.addEventListener("resize", () => {
-                console.log("resized");
-                ExitZoomPanning();
+                FullZoomPanning();
             });
             
 
@@ -821,6 +843,8 @@
             const progressCurrent = document.getElementById('progress-current');
             const progressTotal = document.getElementById('progress-total');
             const progressBarContainer = document.getElementById('progress-bar-container');
+            const progressLink = document.getElementById('progress-link');
+            progressLink.href = window.location.href;
 
             function formatTime(seconds) {
                 if(isNaN(seconds) || seconds < 0) return '00:00';
@@ -1215,8 +1239,16 @@
                     player.addEventListener("loadedmetadata", () => {
                         console.log(`metadata loaded - ${player.videoWidth}x${player.videoHeight}`);
                         console.log(`win : ${window.innerWidth}x${window.innerHeight}`);
-                        ExitZoomPanning();
+                        
+                        if(zoomPanningStayed) {
+                            FullZoomPanning();
+                        }
+                        else {
+                            ExitZoomPanning();
+                        }
+                        
                         updateProgressPanel();
+                        showProgressPanel();
                     });
 
                     video_saturate = 1.0;

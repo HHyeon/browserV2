@@ -570,6 +570,61 @@ function processVideoLoadQueue() {
             continue;
         }
 
+        // FFmpeg 응답 전에도 파일명 먼저 표시
+        let nameLabel = videoElement.parentElement.querySelector(`.video-name-label[data-vidname="${CSS.escape(videoInfo.name)}"]`);
+        if (!nameLabel) {
+            nameLabel = document.createElement('div');
+            nameLabel.className = 'video-name-label';
+            nameLabel.dataset.vidname = videoInfo.name;
+            nameLabel.textContent = videoInfo.name;
+            nameLabel.style.cssText = `
+                position: absolute;
+                top: 2px;
+                left: 0;
+                right: 0;
+                padding: 2px 4px;
+                font-size: 10px;
+                color: white;
+                background: rgba(0,0,0,0.5);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                z-index: 5;
+                pointer-events: none;
+            `;
+            videoElement.parentElement.insertBefore(nameLabel, videoElement);
+        }
+
+        // FFmpeg 응답 전에도 progress bar 먼저 표시
+        let progressBarContainer = videoElement.parentElement.querySelector(`.video-progress-container[data-vidname="${CSS.escape(videoInfo.name)}"]`);
+        if (!progressBarContainer) {
+            progressBarContainer = document.createElement('div');
+            progressBarContainer.className = 'video-progress-container';
+            progressBarContainer.dataset.vidname = videoInfo.name;
+            progressBarContainer.style.cssText = `
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: rgba(0,0,0,0.5);
+                z-index: 5;
+                pointer-events: none;
+            `;
+            const progressBar = document.createElement('div');
+            progressBar.className = 'video-progress-bar';
+            progressBar.dataset.vidname = videoInfo.name;
+            progressBar.style.cssText = `
+                height: 100%;
+                width: 0%;
+                background: rgba(0,200,255,0.8);
+                transition: width 0.3s ease;
+                pointer-events: none;
+            `;
+            progressBarContainer.appendChild(progressBar);
+            videoElement.parentElement.insertBefore(progressBarContainer, videoElement);
+        }
+
         const videoPath = videoInfo.cacheKey || videoElement.src;
         const videoDuration = videoElement.duration || 60;
         const seekTime = (Math.random() * videoDuration).toFixed(1);
@@ -623,66 +678,24 @@ function processVideoLoadQueue() {
 
                 const imgElement = document.createElement('img');
                 imgElement.src = imagedatabase64;
-                imgElement.style.cssText = 'position: absolute; width: 100%; height: calc(100% - 16px); top: 16px; object-fit: cover; pointer-events: none;';
+                imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
                 imgElement.alt = 'Video thumbnail';
                 imgElement.dataset.fname = videoInfo.fname;
 
-                const nameLabel = document.createElement('div');
-                nameLabel.className = 'video-name-label';
-                nameLabel.textContent = videoInfo.name;
-                nameLabel.style.cssText = `
-                    position: absolute;
-                    top: 2px;
-                    left: 0;
-                    right: 0;
-                    padding: 2px 4px;
-                    font-size: 10px;
-                    color: white;
-                    background: rgba(0, 0, 0, 0.5);
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    z-index: 5;
-                    pointer-events: none;
-                `;
-
-                const progressBarContainer = document.createElement('div');
-                progressBarContainer.className = 'video-progress-container';
-                progressBarContainer.style.cssText = `
-                    position: absolute;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    height: 4px;
-                    background: rgba(0, 0, 0, 0.5);
-                    z-index: 5;
-                    pointer-events: none;
-                `;
-
-                const progressBar = document.createElement('div');
-                progressBar.className = 'video-progress-bar';
-                progressBar.style.cssText = `
-                    height: 100%;
-                    width: 0%;
-                    background: rgba(0, 200, 255, 0.8);
-                    transition: width 0.3s ease;
-                    pointer-events: none;
-                `;
-
                 const currentSeekTime = Math.random() * (videoElement.duration || 60);
                 const videoDuration = videoElement.duration || 60;
-                progressBar.style.width = `${(currentSeekTime / videoDuration) * 100}%`;
 
-                progressBarContainer.appendChild(progressBar);
+                const existingProgressBar = videoElement.parentElement.querySelector(`.video-progress-bar[data-vidname="${CSS.escape(videoInfo.name)}"]`);
+                if (existingProgressBar) {
+                    existingProgressBar.style.width = `${(currentSeekTime / videoDuration) * 100}%`;
+                }
 
                 videoElement.parentElement.insertBefore(imgElement, videoElement);
-                videoElement.parentElement.insertBefore(nameLabel, videoElement);
-                videoElement.parentElement.insertBefore(progressBarContainer, videoElement);
                 videoElement.remove();
                 console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
 
                 if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
-                    makeitem_Store[videoInfo.fname].progressBar = progressBar;
+                    makeitem_Store[videoInfo.fname].progressBar = existingProgressBar;
                 }
 
                 thumbnailObserver.observe(imgElement);
@@ -833,7 +846,8 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         
                 if(dirbelowimgs.length > 0) {
                     item_img = true;
-                    imgpath = belowdirseekpath + "/" + randChoice(dirbelowimgs);
+                    const selectedImg = randChoice(dirbelowimgs);
+                    imgpath = belowdirseekpath + "/" + encodeURIComponent(selectedImg);
                 }
                 
             }
@@ -843,11 +857,11 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     
                 if(isImageExt(fnameext)) {
                     item_img = true;
-                    imgpath = parampath + "/" + fname;
+                    imgpath = parampath + "/" + encodeURIComponent(fname);
                 }
                 else if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') {
                     item_vid = true;
-                    vidpath = parampath + "/" + encodeURI(fname);
+                    vidpath = parampath + "/" + encodeURIComponent(fname);
                     
                     // // 🔑 IndexedDB 캐시 키: 원본 경로 (인코딩 X) → 일관성 유지
                     // // encodeURI()는 HTML 속성에만 사용, IndexedDB 키는 원본 사용
@@ -1010,34 +1024,19 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     // 주의: IndexedDB에서는 원본 경로(인코딩 X)를 사용
     const cacheKeyForAttr = parampath + "/" + fname;
     const imgAttrs = item_vid ? ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"` : '';
+    const imgDragAttrs = 'draggable="false" style="pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;"';
     
-    let videoOverlays = '';
-    if (item_vid && makeitem_stored) {
-        const storedData = makeitem_Store[fname];
-        const currentSeekTime = storedData?.currentSeekTime || 0;
-        const videoDuration = storedData?.videoDuration || 60;
-        const progressPercent = (currentSeekTime / videoDuration) * 100;
-        
-        videoOverlays = `
-            <div class="video-name-label" style="position: absolute; top: 2px; left: 0; right: 0; padding: 2px 4px; font-size: 10px; color: white; background: rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 5; pointer-events: none;">${fname}</div>
-            <div class="video-progress-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.5); z-index: 5; pointer-events: none;">
-                <div class="video-progress-bar" style="height: 100%; width: ${progressPercent}%; background: rgba(0,200,255,0.8); transition: width 0.3s ease;"></div>
-            </div>
-        `;
-    }
-    
-    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; " ${imgAttrs}>`;
+    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover;" ${imgAttrs}>`;
     if (item_vid) {
-        imgelements = `
-            <img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: calc(100% - 16px); top: 16px; object-fit:cover; pointer-events: none;" ${imgAttrs}>
-            ${videoOverlays}
-        `;
+        imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
+    } else {
+        imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
     }
     let cachedAttrs = '';
     if(item_vid) {
         cachedAttrs = ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"`;
     }
-    let videlements = `<video muted src=${vidpath} preload="none" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
+    let videlements = `<video muted src="${vidpath}" preload="none" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
 
     // let videlements = `<div style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></div>`;
     
@@ -1047,7 +1046,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     }
     
     // autoplay
-    ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; ">
+    ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; pointer-events: auto; ">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">
         <div class="layer-text" style="${layerTextStyle}">
             <h3>${text}</h3>
