@@ -1303,7 +1303,7 @@ async function startup() {
             if(visual_pictures_row == 0) visual_pictures_row = 1;
             if(visual_pictures_row > 4) visual_pictures_row = 4;
 
-            item_w = ((window.innerWidth-(16/window.devicePixelRatio))/visual_pictures_row);
+            item_w = ((window.innerWidth-(25/window.devicePixelRatio))/visual_pictures_row);
             // item_w = 400;
             item_h = item_w/4*3;
             visual_pictures_col = Math.floor(window.innerHeight / item_h)+2;
