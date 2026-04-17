@@ -412,6 +412,15 @@
                 {
                     ExitZoomPanning();
                 }
+
+                if(document.fullscreenElement) {
+                    zoomBoxview.style.visibility = 'hidden';
+                }
+                else {
+                    if(zoomPanningStayed)
+                        zoomBoxview.style.visibility = 'visible';
+                }
+
             });
             
 
