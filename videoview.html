@@ -64,7 +64,7 @@
                 bottom: 5vh;
                 left: calc(100vw / 3);
                 width: calc(100vw / 3);
-                transform: translateX(0);
+                transform: translate(0, 0);
                 background-color: rgba(0, 0, 0, 0.7);
                 border-radius: 8px;
                 padding: 12px 16px;
@@ -700,8 +700,10 @@
                     break;
 
                     case '.':
-                        
-                        ToggleFullZoomPanning();
+
+                        if(!document.fullscreenElement) {
+                            ToggleFullZoomPanning();
+                        }
 
                         break;
                     case ' ':
@@ -711,8 +713,10 @@
                     case 'f':
                         {
                             if (!document.fullscreenElement) {
-                                document.documentElement.requestFullscreen()
-                            } else {
+                                document.documentElement.requestFullscreen();
+                                ExitZoomPanning();
+                            }
+                            else {
                                 if (document.exitFullscreen)
                                     document.exitFullscreen()
                             }
@@ -859,6 +863,11 @@
             let mouselongpressedcheckTimer = null;
 
             let progressHideTimer = null;
+            let progressPanelDragging = false;
+            let progressPanelDragStartX = 0;
+            let progressPanelDragStartY = 0;
+            let progressPanelTranslateX = 0;
+            let progressPanelTranslateY = 0;
             const progressPanel = document.getElementById('progress-panel');
             const progressBar = document.getElementById('progress-bar');
             const progressCurrent = document.getElementById('progress-current');
@@ -866,6 +875,19 @@
             const progressBarContainer = document.getElementById('progress-bar-container');
             const progressLink = document.getElementById('progress-link');
             progressLink.href = window.location.href;
+
+            progressPanel.addEventListener('mousedown', (e) => {
+                if (e.target.id === 'progress-bar-container' || 
+                    e.target.id === 'progress-bar') {
+                    return;
+                }
+                e.preventDefault();
+                progressPanelDragging = true;
+                progressPanelDragStartX = e.clientX - progressPanelTranslateX;
+                progressPanelDragStartY = e.clientY - progressPanelTranslateY;
+                progressPanel.style.cursor = 'move';
+                showProgressPanel(true);
+            });
 
             function formatTime(seconds) {
                 if(isNaN(seconds) || seconds < 0) return '00:00';
@@ -948,29 +970,28 @@
 
                 switch(param.button) {
                     case 0: // left
+                        {
+                            const targetElement = document.elementFromPoint(param.clientX, param.clientY);
+                            if(targetElement && (targetElement.id === 'progress-panel' || 
+                                targetElement.closest('#progress-panel'))) {
+                                break;
+                            }
+                            mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
 
-                        mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
-
-                        if(zoomPanningStayed) {
-                            videozoompanning_dragging = true;
-                            // videozoompanning_mousepos_start = {x:param.x, y:param.y};
-                            // console.log(`videozoompanning_mousepos_start - ${currTranslateX}, ${currTranslateY}`);
+                            if(zoomPanningStayed) {
+                                videozoompanning_dragging = true;
+                                zoomPanning_start(param.x, param.y);
+                                player.style.cursor = 'none';
+                            }
+                            else {
+                                leftmousedowned = true;
+                                leftmouse_movestarted = true;
+                                leftmousedownpos = param.x;
+                                seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
+                            }
                             
-                            // PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH;
-                            // console.log(`1:1 scale: ${PANNINGZOOM_VIEW_SCALE}`);
-                            zoomPanning_start(param.x, param.y);
-                            player.style.cursor = 'none';
-
+                            break;
                         }
-                        else {
-                            leftmousedowned = true;
-                            leftmouse_movestarted = true;
-                            leftmousedownpos = param.x;
-                            seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
-                        }
-                    
-                        break;
-                    
                     case 1: // middle
                         player.playbackRate = 1.0;
                         setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
@@ -993,6 +1014,11 @@
                         
                             videozoompanning_dragging = false;
                             player.style.cursor = '';
+
+                            if(progressPanelDragging) {
+                                progressPanelDragging = false;
+                                progressPanel.style.cursor = '';
+                            }
 
                             if(zoomPanningStayed) {
                             }
@@ -1030,6 +1056,10 @@
                     
                     case 2: // right
                         {
+                            if(progressPanelDragging) {
+                                progressPanelDragging = false;
+                                progressPanel.style.cursor = '';
+                            }
                             rightmousedowned = false;
                             player.playbackRate = speed_currentpushstarts - speed_currentpush;
 
@@ -1094,6 +1124,16 @@
                 if(mouselongpressedcheckTimer != null) {
                     clearTimeout(mouselongpressedcheckTimer);
                     mouselongpressedcheckTimer = null;
+                }
+
+                if(progressPanelDragging) {
+                    const newX = param.clientX - progressPanelDragStartX;
+                    const newY = param.clientY - progressPanelDragStartY;
+                    progressPanelTranslateX = newX;
+                    progressPanelTranslateY = newY;
+                    progressPanel.style.transform = `translate(${newX}px, ${newY}px)`;
+                    showProgressPanel(true);
+                    return;
                 }
 
                 if(videozoompanning_dragging) {
