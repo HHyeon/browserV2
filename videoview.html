@@ -121,7 +121,7 @@
 
         </style>
     </head>
-    <body draggable="false" oncontextmenu="return true">
+    <body draggable="false">
 
         <div draggable="false" class="container">
             <video id="player" buffered autoplay></video>
@@ -875,6 +875,17 @@
             const progressBarContainer = document.getElementById('progress-bar-container');
             const progressLink = document.getElementById('progress-link');
             progressLink.href = window.location.href;
+
+            progressLink.addEventListener('contextmenu', (e) => {
+                e.stopPropagation();
+            });
+            
+            document.addEventListener('contextmenu', (e) => {
+                const targetElement = document.elementFromPoint(e.clientX, e.clientY);
+                if(!(targetElement && targetElement.id === 'progress-link')) {
+                    e.preventDefault();
+                }
+            });
 
             progressPanel.addEventListener('mousedown', (e) => {
                 if (e.target.id === 'progress-bar-container' || 
