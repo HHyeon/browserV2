@@ -304,10 +304,10 @@
 
         function showImage(i) {
 
-            if(zoomPanningStayed) {
+            if(!zoomPanningStayed) {
                 ExitZoomPanning();
             }
-            zoomPanningStayed = false;
+            // zoomPanningStayed = false;
             isRightDragging = false;
 
             idx = (i + images.length) % images.length;
@@ -336,6 +336,7 @@
 
         let MouseL_Dragging = false;
         let startX = 0, startY = 0;
+        let startXfromcenter, startYfromcenter;
         let currTranslateX = 0, currTranslateY = 0;
         const viewerElem = document.getElementById('viewer');
 
@@ -404,14 +405,20 @@
             PANNINGZOOM_VIEW_SCALE_PIXCELMATCH = 1 / window.devicePixelRatio;
             PANNINGZOOM_VIEW_SCALE_DEFAULT = Math.min(window.innerWidth/viewerElem.naturalWidth, window.innerHeight/viewerElem.naturalHeight);
 
-            ExitZoomPanning();
+            if(zoomPanningStayed) {
+                start_PanningZoom_PixelMatch(window.innerWidth * startXfromcenter, window.innerHeight * startYfromcenter);
+                viewerElem.style.cursor = '';
+            }
+            else {    
+                ExitZoomPanning();
+            }
 
             console.log(`default viewscale ${PANNINGZOOM_VIEW_SCALE}`);
             console.log(`moveing scale: ${zoom_moveing_scale_x}, ${zoom_moveing_scale_y}`);
 
-            updateViewbox();
+            // updateViewbox();
 
-            zoomBoxview.style.visibility = 'hidden';
+            // zoomBoxview.style.visibility = 'hidden';
         }
 
         // disable context menu so right-click can navigate
@@ -496,8 +503,14 @@
             currTranslateY = viewerElem.naturalHeight/2 - mouseyinmgs_realimg;
             startX = mX;
             startY = mY;
+        
+            startXfromcenter = startX / viewerElem.naturalWidth;
+            startYfromcenter = startY / viewerElem.naturalHeight;
+            // console.log(`${startXfromcenter}, ${startYfromcenter}`);
 
             zoomPanning_Update();
+
+            hideProgressPanel();
         }
 
         function zoomPanning_move(mX, mY) {
@@ -543,14 +556,18 @@
                 }
                 else
                 {
-                    PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH;
-                    console.log(`1:1 scale: ${PANNINGZOOM_VIEW_SCALE}`);
-                    zoomPanning_start(e.clientX, e.clientY);
-                    viewerElem.style.cursor = 'none';
+                    start_PanningZoom_PixelMatch(e.clientX, e.clientY);
                 }
 
             }
         });
+
+        function start_PanningZoom_PixelMatch(x,y) {
+            PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_PIXCELMATCH;
+            console.log(`1:1 scale: ${PANNINGZOOM_VIEW_SCALE}`);
+            zoomPanning_start(x,y);
+            viewerElem.style.cursor = 'none';
+        }
 
         document.addEventListener('mousemove', e => {
 
@@ -563,8 +580,7 @@
                 
                 zoomPanning_move(e.clientX, e.clientY);
             }
-            
-            if(isRightDragging) {
+            else if(isRightDragging) {
                 const deltaX = e.clientX - rightDragStartX;
                 const absDelta = Math.abs(deltaX);
                 if(absDelta >= RIGHT_DRAG_THRESHOLD) {
@@ -613,7 +629,6 @@
 
         document.addEventListener('mouseup', e => {
 
-
             if(e.button === 0) {
 
                 if(mouselongpressedcheckTimer != null) { // cancel longpressed timeout 
@@ -623,7 +638,6 @@
 
                 if(zoomPanningStayed) {
                     MouseL_Dragging = false;
-
                     viewerElem.style.cursor = '';
                 }
                 else

@@ -1217,7 +1217,15 @@
 
                 }
                 else {
-                    showProgressPanel();
+
+                    if(videozoompanning_dragging)
+                    {
+                        hideProgressPanel();   
+                    }
+                    else
+                    {
+                        showProgressPanel();
+                    }
                 }
 
             });
