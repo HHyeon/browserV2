@@ -581,7 +581,14 @@
                 }
             }
             else {
-                showProgressPanel();
+                if(zoomPanningStayed || MouseL_Dragging)
+                {
+                    
+                }
+                else
+                {
+                    showProgressPanel();
+                }
             }
             
         });
