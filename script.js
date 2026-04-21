@@ -468,8 +468,15 @@ const ThumbnailIntervalManager = {
             return;
         }
 
-        const videoDuration = itemData.videoDuration || 60;
-        itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 1) % videoDuration;
+        const videoDuration = itemData.videoDuration || 30;
+        if(itemData.videoDuration === undefined) {
+            console.warn(`[ThumbnailUpdate] Missing videoDuration for ${fname}, using default 30s`);
+        }
+        itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 10) % videoDuration;
+
+        if(itemData.currentSeekTime < 30) itemData.currentSeekTime = 30; // minimum 30s start
+        console.log(`[ThumbnailUpdate] Updating ${fname} at ${itemData.currentSeekTime.toFixed(1)}s / ${videoDuration}s`);
+
         const seekTime = itemData.currentSeekTime;
         const currentFname = fname;
         const currentImgElement = imgElement;
@@ -557,7 +564,7 @@ function clearAllThumbnailIntervals() {
 }
 
 // makeitem() 호출 후 추가할 함수
-function processVideoLoadQueue() {
+async function processVideoLoadQueue() {
     while (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
         const videoInfo = videoLoadQueue.shift();
         activeVideoLoads++;
@@ -626,8 +633,24 @@ function processVideoLoadQueue() {
         }
 
         const videoPath = videoInfo.cacheKey || videoElement.src;
-        const videoDuration = videoElement.duration || 60;
-        const seekTime = (Math.random() * videoDuration).toFixed(1);
+        const videoDurationifFail = 60;
+        
+        let videoDuration = videoElement.duration;
+        if (!videoDuration || !Number.isFinite(videoDuration)) {
+            await new Promise(resolve => {
+                videoElement.addEventListener('loadedmetadata', resolve, { once: true });
+            });
+            videoDuration = videoElement.duration || videoDurationifFail;
+
+            if(!videoElement.duration) {
+                console.warn(`[VideoLoad] Unable to get duration for ${videoInfo.name}, using fallback ${videoDurationifFail}s`);
+            }
+        }
+
+
+        // console.log(videoElement);
+        let seekTime = (Math.random() * videoDuration).toFixed(1);
+        if(seekTime < 30) seekTime = 30; // minimum 30s start
 
         console.log(`[FFmpeg] Decoding ${videoInfo.name} at ${seekTime}s via ${FFMPEG_SERVER_URL}`);
 
@@ -658,8 +681,8 @@ function processVideoLoadQueue() {
                 makeitem_Store[videoInfo.fname].item_img = true;
                 makeitem_Store[videoInfo.fname].imgpath = imagedatabase64;
                 makeitem_Store[videoInfo.fname].videoPath = videoPath;
-                makeitem_Store[videoInfo.fname].videoDuration = videoElement.duration || 60;
-                makeitem_Store[videoInfo.fname].currentSeekTime = Math.random() * (videoElement.duration || 60);
+                makeitem_Store[videoInfo.fname].videoDuration = videoElement.duration || videoDurationifFail;
+                makeitem_Store[videoInfo.fname].currentSeekTime = Math.random() * (videoElement.duration || videoDurationifFail);
                 console.log(`[Cache] Updated makeitem_Store for: ${videoInfo.fname}`);
             }
 
@@ -682,8 +705,8 @@ function processVideoLoadQueue() {
                 imgElement.alt = 'Video thumbnail';
                 imgElement.dataset.fname = videoInfo.fname;
 
-                const currentSeekTime = Math.random() * (videoElement.duration || 60);
-                const videoDuration = videoElement.duration || 60;
+                const currentSeekTime = Math.random() * (videoElement.duration || videoDurationifFail);
+                const videoDuration = videoElement.duration || videoDurationifFail;
 
                 const existingProgressBar = videoElement.parentElement.querySelector(`.video-progress-bar[data-vidname="${CSS.escape(videoInfo.name)}"]`);
                 if (existingProgressBar) {
@@ -1036,7 +1059,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     if(item_vid) {
         cachedAttrs = ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"`;
     }
-    let videlements = `<video muted src="${vidpath}" preload="none" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
+    let videlements = `<video muted src="${vidpath}" preload="metadata" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
 
     // let videlements = `<div style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></div>`;
     
