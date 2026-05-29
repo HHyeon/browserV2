@@ -384,6 +384,8 @@
         }
 
         progressBarContainer.addEventListener('click', (e) => {
+            console.log('progress bar clicked');
+
             const rect = progressBarContainer.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const percent = clickX / rect.width;
@@ -460,6 +462,7 @@
             else {
                 console.log(`zoomPanningStayed exit`);
                 ExitZoomPanning();
+                
             }
 
         }
@@ -546,6 +549,7 @@
                 isRightDragging = true;
             }
             else if(e.button === 0) {
+
                 mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
                 
                 MouseL_Dragging = true;
@@ -610,6 +614,9 @@
         });
 
         function ExitZoomPanning() {
+            clearTimeout(mouselongpressedcheckTimer);
+            mouselongpressedcheckTimer = null;
+            
             zoomPanningStayed = false;
             PANNINGZOOM_VIEW_SCALE = PANNINGZOOM_VIEW_SCALE_DEFAULT;
 
@@ -632,7 +639,9 @@
             if(e.button === 0) {
 
                 if(mouselongpressedcheckTimer != null) { // cancel longpressed timeout 
+                    console.log("short pressed !");
                     clearTimeout(mouselongpressedcheckTimer);
+                    mouselongpressedcheckTimer = null;                    
                     mouseLClickShortPressed();
                 }
 

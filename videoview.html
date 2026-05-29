@@ -544,10 +544,20 @@
                         if(player.style.visibility == '')
                         {
                             player.style.visibility='hidden';
+
+                            player_paused_state = false;
+                            pauseplay();
+                            
+                            if (document.exitFullscreen)
+                                document.exitFullscreen()
                         }
                         else
                         {
                             player.style.visibility='';
+                            
+                            player_paused_state = true;
+                            pauseplay();
+
                         }
                     break;
                     
@@ -1311,8 +1321,15 @@
                         if(setplaytime)
                         {
                             setplaytime = false;
-                            player.currentTime = (player.duration / 10) * (Math.random()*5.0);
+                            const duration_block = player.duration / 10;
+                            player.currentTime = duration_block + (duration_block * (Math.random()*3.0));
                             console.log(player.currentTime);
+                            
+                            const progress = (player.currentTime / player.duration * 100).toFixed(2);
+                            const sec = parseInt(player.currentTime);
+                            msg = `moved - ${progress}% (${sec}s)`;
+                            setLabelText(msg);
+                            
                         }
                         updateProgressPanel();
                     });
