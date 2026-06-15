@@ -964,7 +964,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
 
         linkelemnts = ``;
         
-        if(fname.substr(0, 3).toLowerCase() == 'tmw')
+        if(fname.includes('vr') || fname.includes('VR'))
         {
             linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
         }
@@ -1299,8 +1299,10 @@ async function startup() {
 
                 return (
                     !(
+                        // ignore from list 
                         text.endsWith(".jpg") ||
                         text.endsWith(".jpeg") ||
+                        text.endsWith(".png") ||
                         text.endsWith(".sh")
                     ) || text.endsWith(".mp4") || text.endsWith(".mov") || text.endsWith(".mkv")
                     // || !hasExt

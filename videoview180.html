@@ -275,13 +275,20 @@
                 switch(param.key){
 
                     case 'Backspace':
-                        if(player.style.visibility == '')
+                        
+                        if(document.querySelectorAll('canvas')[0].style.visibility == '')
                         {
-                            player.style.visibility='hidden';
+                            player.pause();
+                            document.querySelectorAll('canvas')[0].style.visibility='hidden';
+                            
+                            
+                            if (document.exitFullscreen)
+                                document.exitFullscreen();
                         }
                         else
                         {
-                            player.style.visibility='';
+                            player.play();
+                            document.querySelectorAll('canvas')[0].style.visibility='';
                         }
                     break;
                     
