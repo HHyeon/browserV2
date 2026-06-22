@@ -37,8 +37,9 @@ let typing_panel = document.getElementById('typing_panel');
 let input_search = document.querySelector('.input_search');
 
 
-
-let visual_pictures_row = 4;
+const visual_pictures_row_item_px = 500;
+const visual_pictures_row_max = 3;
+let visual_pictures_row = 0;
 let visual_pictures_col = 0;
 
 
@@ -1324,9 +1325,9 @@ async function startup() {
                 });
             }
 
-            visual_pictures_row = Math.round(window.innerWidth / 400);
+            visual_pictures_row = Math.round(window.innerWidth / visual_pictures_row_item_px);
             if(visual_pictures_row == 0) visual_pictures_row = 1;
-            if(visual_pictures_row > 4) visual_pictures_row = 4;
+            if(visual_pictures_row > visual_pictures_row_max) visual_pictures_row = visual_pictures_row_max;
 
             item_w = ((window.innerWidth-(25/window.devicePixelRatio))/visual_pictures_row);
             // item_w = 400;

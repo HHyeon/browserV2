@@ -277,17 +277,22 @@
                     case 'Backspace':
                         
                         if(document.querySelectorAll('canvas')[0].style.visibility == '')
-                        {
+                        {                            
+                            player_paused_state = true;
                             player.pause();
+                            setLabelText("pause");
+
                             document.querySelectorAll('canvas')[0].style.visibility='hidden';
-                            
                             
                             if (document.exitFullscreen)
                                 document.exitFullscreen();
                         }
                         else
                         {
+                            player_paused_state = false;
                             player.play();
+                            setLabelText("play");
+                            
                             document.querySelectorAll('canvas')[0].style.visibility='';
                         }
                     break;
