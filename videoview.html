@@ -529,6 +529,28 @@
                 
             });
 
+                        
+            window.addEventListener('focus', () => {
+                
+                if(player.style.visibility == '')
+                {
+                    player_paused_state = false;
+                    player.play();
+                    setLabelText("play");
+                }
+                else
+                {
+
+                }
+            });
+            window.addEventListener('blur', () => {
+                player_paused_state = true;
+                player.pause();
+                setLabelText("pause");
+            });
+
+
+
             let muteState = false;
             let mutevolumestore = 0.00;
 

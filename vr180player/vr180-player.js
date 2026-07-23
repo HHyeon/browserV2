@@ -717,7 +717,7 @@ function init() {
 		}
 		
 		// Initialize 2D control panel
-		init2DControlPanel();
+		// init2DControlPanel();
 
 		handleEnterVRButtonClick();
 	} catch (e) {
@@ -1174,6 +1174,8 @@ function init2DControlPanel() {
 }
 
 function show2DControlPanel() {
+	return;
+
 	if (!is2DMode || !controlPanel) return;
 
 	console.log("Showing 2D control panel");
@@ -1186,6 +1188,9 @@ function show2DControlPanel() {
 }
 
 function hide2DControlPanel() {
+	return;
+
+	
 	if (!controlPanel) return;
 
 	console.log("Hiding 2D control panel");

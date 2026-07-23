@@ -29,6 +29,65 @@
                 right: 2%;
                 top: 2%;
                 background-color: rgba(0, 0, 0, 0.2);
+                visibility: hidden;
+            }
+
+            #progress-panel {
+                position: fixed;
+                bottom: 5vh;
+                left: calc(100vw / 3);
+                width: calc(100vw / 3);
+                transform: translate(0, 0);
+                background-color: rgba(0, 0, 0, 0.7);
+                border-radius: 8px;
+                padding: 12px 16px;
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 0.3s ease, visibility 0.3s ease;
+                z-index: 1000;
+                box-sizing: border-box;
+            }
+
+            #progress-time {
+                text-align: center;
+                font-size: 1vmin;
+                margin-bottom: 10px;
+            }
+
+            #progress-bar-container {
+                width: 100%;
+                height: 2vmin;
+                background-color: rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+                overflow: hidden;
+                cursor: pointer;
+                position: relative;
+            }
+
+            #progress-bar {
+                height: 100%;
+                background-color: rgba(100, 180, 255, 0.9);
+                border-radius: 4px;
+                width: 0%;
+                transition: width 0.1s linear;
+                pointer-events: none;
+            }
+
+            #progress-link {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                font-size: 1.2vmin;
+                color: rgba(255, 255, 255, 0.7);
+                text-decoration: none;
+                padding: 2px 6px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border-radius: 3px;
+                pointer-events: auto;
+            }
+
+            #progress-link:hover {
+                background-color: rgba(255, 255, 255, 0.2);
             }
 
         </style>
@@ -45,7 +104,19 @@
 
         <h1 id="label1"></h1>
         <h1 id="label2"></h1>
-    
+
+        <div id="progress-panel">
+            <a id="progress-link" href="#" target="_blank">Link</a>
+            <div id="progress-time">
+                <span id="progress-current">00:00</span>
+                <span id="progress-separator"> / </span>
+                <span id="progress-total">00:00</span>
+            </div>
+            <div id="progress-bar-container">
+                <div id="progress-bar"></div>
+            </div>
+        </div>
+
         <script>
 
             player = document.getElementById("vr180");
@@ -99,8 +170,7 @@
             };
 
             player.addEventListener("timeupdate", (event) => {
-                const progress = (player.currentTime / player.duration * 100).toFixed(2);
-                document.getElementById("label2").innerText=`(${progress}%)`;
+                updateProgressPanel();
             });
             
             const label1 = document.getElementById("label1");
@@ -164,6 +234,7 @@
                     player.pause();
                     setLabelText("pause");
                 }
+                showProgressPanel();
             }
 
             function volumncontrol(updown)
@@ -267,12 +338,66 @@
 
             let muteState = false;
             let mutevolumestore = 0.00;
+            
+
+            let skip_pause = false;
+                        
+            window.addEventListener('focus', () => {
+                
+
+                if(skip_pause)
+                {
+                    setLabelText("skip play");
+                    return;
+                }
+        
+                if(document.querySelectorAll('canvas')[0].style.visibility == '')
+                {
+                    player_paused_state = false;
+                    player.play();
+                    setLabelText("play");
+                }
+                else
+                {
+
+                }
+
+            });
+
+            window.addEventListener('blur', () => {
+
+                if(skip_pause)
+                {
+                    setLabelText("skip pause");
+                    return;
+                }
+                
+                if(document.querySelectorAll('canvas')[0].style.visibility == '')
+                {
+                    player_paused_state = true;
+                    player.pause();
+                    setLabelText("pause");
+                }
+                else
+                {
+
+                }
+                
+            });
 
             function onKeydown(param)
             {
                 console.log(param.key);
 
                 switch(param.key){
+
+                    case '/':
+
+                        skip_pause = !skip_pause;
+                        if(skip_pause) setLabelText(`skip blur pause`);
+                        else setLabelText(`skip blur pause disabled`);
+
+                    break;
 
                     case 'Backspace':
                         
@@ -627,6 +752,11 @@
 
             document.addEventListener("mousedown", (param) => {
 
+                const targetElement = document.elementFromPoint(param.clientX, param.clientY);
+                if(targetElement && (targetElement.id === 'progress-panel' || targetElement.closest('#progress-panel'))) {
+                    return;
+                }
+
                 switch(param.button) {
                     // case 0: // left
                     //     leftmousedowned = true;
@@ -790,7 +920,122 @@
                     // console.log(`push - ${speed_currentpushstarts - speed_currentpush}`);
 
                 }
+                else {
+                    showProgressPanel();
+                }
 
+            });
+
+
+            // --- Progress Panel ---
+            const progressPanel = document.getElementById('progress-panel');
+            const progressBar = document.getElementById('progress-bar');
+            const progressCurrent = document.getElementById('progress-current');
+            const progressTotal = document.getElementById('progress-total');
+            const progressBarContainer = document.getElementById('progress-bar-container');
+            const progressLink = document.getElementById('progress-link');
+            progressLink.href = window.location.href;
+
+            progressLink.addEventListener('contextmenu', (e) => {
+                e.stopPropagation();
+            });
+
+            let progressHideTimer = null;
+            let progressPanelDragging = false;
+            let progressPanelDragStartX = 0;
+            let progressPanelDragStartY = 0;
+            let progressPanelTranslateX = 0;
+            let progressPanelTranslateY = 0;
+
+            function formatTime(seconds) {
+                if(isNaN(seconds) || seconds < 0) return '00:00';
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = Math.floor(seconds % 60);
+                if(h > 0) {
+                    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                }
+                return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
+
+            function updateProgressPanel() {
+                if(!player.duration) return;
+                const current = player.currentTime;
+                const total = player.duration;
+                const percent = (current / total) * 100;
+
+                progressBar.style.width = percent + '%';
+                progressCurrent.textContent = formatTime(current);
+                progressTotal.textContent = formatTime(total);
+            }
+
+            function showProgressPanel(keepVisible = false) {
+                if(progressHideTimer) clearTimeout(progressHideTimer);
+                progressPanel.style.opacity = '1';
+                progressPanel.style.visibility = 'visible';
+                if(!keepVisible) {
+                    progressHideTimer = setTimeout(() => {
+                        progressPanel.style.opacity = '0';
+                        progressPanel.style.visibility = 'hidden';
+                        progressHideTimer = null;
+                    }, 500);
+                } else {
+                    progressHideTimer = null;
+                }
+            }
+
+            function hideProgressPanel() {
+                if(progressHideTimer) clearTimeout(progressHideTimer);
+                progressPanel.style.opacity = '0';
+                progressPanel.style.visibility = 'hidden';
+                progressHideTimer = null;
+            }
+
+            progressBarContainer.addEventListener('click', (e) => {
+                const rect = progressBarContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const percent = clickX / rect.width;
+                if(player.duration) {
+                    player.currentTime = player.duration * percent;
+                    updateProgressPanel();
+                    showProgressPanel();
+                }
+            });
+
+            progressBarContainer.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+            });
+
+            progressPanel.addEventListener('mousedown', (e) => {
+                if (e.target.id === 'progress-bar-container' ||
+                    e.target.id === 'progress-bar') {
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                progressPanelDragging = true;
+                progressPanelDragStartX = e.clientX - progressPanelTranslateX;
+                progressPanelDragStartY = e.clientY - progressPanelTranslateY;
+                progressPanel.style.cursor = 'move';
+                showProgressPanel(true);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if(progressPanelDragging) {
+                    const newX = e.clientX - progressPanelDragStartX;
+                    const newY = e.clientY - progressPanelDragStartY;
+                    progressPanelTranslateX = newX;
+                    progressPanelTranslateY = newY;
+                    progressPanel.style.transform = `translate(${newX}px, ${newY}px)`;
+                    showProgressPanel(true);
+                }
+            });
+
+            document.addEventListener('mouseup', (e) => {
+                if(progressPanelDragging) {
+                    progressPanelDragging = false;
+                    progressPanel.style.cursor = '';
+                }
             });
 
 
@@ -860,7 +1105,7 @@
                     video_contrast = 1.0;
                     video_filter_set();
 
-                    player.volume = 0.2;
+                    player.volume = 0.5;
                     
                     setLabelText(currentfilename);
                     player.title = currentfilename;
