@@ -371,6 +371,8 @@
                     setLabelText("skip pause");
                     return;
                 }
+
+                if(document.querySelectorAll('canvas') == undefined || document.querySelectorAll('canvas').length == 0) return;
                 
                 if(document.querySelectorAll('canvas')[0].style.visibility == '')
                 {
@@ -385,6 +387,8 @@
                 
             });
 
+            window.addEventListener("keydown", onKeydown);
+            
             function onKeydown(param)
             {
                 console.log(param.key);
@@ -1002,6 +1006,7 @@
                 }
             });
 
+
             progressBarContainer.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
             });
@@ -1043,32 +1048,42 @@
                 
                 if(parampath != null)
                 {
+                    
                     console.log(`parampath - ${parampath}`);
-                    currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
-                    currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
+                    // determine if parameter is a directory or file
+                    let isDir = !parampath.toLowerCase().endsWith('.mp4');
+                    if(isDir)
+                    {
+                        currentdir = parampath;
+                        if(currentdir.endsWith('/')) currentdir = currentdir.slice(0, -1);
+                    }
+                    else
+                    {
+                        currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
+                        currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
+                    }
 
-                    const jsondata=await dirseek(currentdir); 
+                    const jsondata = await dirseek(currentdir);
                     
                     if(jsondata["ret"])
                     {
                         dirlist = jsondata["data"];
                         
+                        // remove hidden files
                         while(true) {  
                             const find__ = dirlist.find((a) => { return a["d"][0] == '.';});
                             if(find__ == undefined) break;
-                            // console.log(`ignore - ${find__["d"]}`);
                             const idx = dirlist.lastIndexOf(find__);
                             dirlist.splice(idx, 1);
                         }
 
+                        // keep only mp4s
                         while(true) {  
                             const find__ = dirlist.find((a) => { return a["d"].substr(a["d"].lastIndexOf('.')) != ".mp4" });
                             if(find__ == undefined) break;
-                            // console.log(`ignore - ${find__["d"]}`);
                             const idx = dirlist.lastIndexOf(find__);
                             dirlist.splice(idx, 1);
                         }
-
                     }
                     
                     for(let i=0;i<dirlist.length;i++)
@@ -1078,27 +1093,51 @@
                     
                     dirlist.sort((a,b) => { return b["t"] - a["t"]; });
 
-                    
                     if(paramfind != null)
                     {
                         console.log(`filtering by ${paramfind}`);   
-                        
                         dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
                     }
 
-                    dirlist = dirlist.filter(e => e["d"].toLowerCase().includes('tmw'));
+                    dirlist = dirlist.filter(e => e["d"].toLowerCase().includes('vr'));
 
                     console.log(dirlist);
 
+                    // if caller passed a directory and it's empty, abort
+                    if(isDir && dirlist.length === 0) {
+                        console.log('no mp4 files in directory');
+                        return;
+                    }
+
+                    // if caller passed a directory, pick a random file now
+                    if(isDir && dirlist.length > 0)
+                    {
+                        const randomitem = dirlist[Math.floor(Math.random() * dirlist.length)];
+                        currentfilename = randomitem['d'];
+                        parampath = currentdir + '/' + currentfilename;
+                        setplaytime = true;
+                        console.log(`random selected - ${currentfilename}`);
+                    }
+
                     player.src = parampath;
-                    // player.addEventListener("playing", () => {
-                    //     if(setplaytime)
-                    //     {
-                    //         setplaytime = false;
-                    //         player.currentTime = (player.duration / 10) * (1+Math.random()*3.0);
-                    //         console.log(player.currentTime);
-                    //     }
-                    // });
+
+                    player.addEventListener("playing", () => {
+                        if(setplaytime)
+                        {
+                            setplaytime = false;
+                            const duration_block = player.duration / 10;
+                            player.currentTime = duration_block + (duration_block * (Math.random()*3.0));
+                            console.log(player.currentTime);
+                            
+                            const progress = (player.currentTime / player.duration * 100).toFixed(2);
+                            const sec = parseInt(player.currentTime);
+                            msg = `moved - ${progress}% (${sec}s)`;
+                            setLabelText(msg);
+                            
+                        }
+                        updateProgressPanel();
+                    });
+
 
                     video_saturate = 1.0;
                     video_brightness = 1.0;
@@ -1110,17 +1149,6 @@
                     setLabelText(currentfilename);
                     player.title = currentfilename;
 
-                    // var promise = player.play();
-
-                    // if(promise != undefined) {
-                    //     promise.then(_ => {
-                    //         console.log("promise returned Successed");
-                    //     }).catch(error => {
-                    //         console.log("promise returned failed");
-                    //     });
-                    // }
-
-                    window.addEventListener("keydown", onKeydown);
                 }
                 else
                 {

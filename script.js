@@ -37,8 +37,8 @@ let typing_panel = document.getElementById('typing_panel');
 let input_search = document.querySelector('.input_search');
 
 
-const visual_pictures_row_item_px = 500;
-const visual_pictures_row_max = 3;
+const visual_pictures_row_item_px = 600;
+const visual_pictures_row_max = 4;
 let visual_pictures_row = 0;
 let visual_pictures_col = 0;
 
@@ -830,6 +830,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     let need_video_load = false;
     let vidpath = '';
     let hasMp4 = false;
+    let hasVR = false;
     let hasHighImageRatio = false;
 
     let makeitem_stored = makeitem_Store[fname];
@@ -861,7 +862,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                         imageCount++;
                     }
                     if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') hasMp4 = true;
-
+                    if(name.toUpperCase().includes('VR')) hasVR = true;
                 })
         
                 let totalFiles = jsondata["data"].length;
@@ -938,6 +939,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             cacheKey: cacheKey,  // ✅ 추가: IndexedDB 캐시 키
             hasMp4: hasMp4 || false,  // 추가: MP4 파일 존재 여부
             hasHighImageRatio: hasHighImageRatio || false,  // 추가: 이미지 파일 80% 이상 여부
+            hasVR: hasVR || false,  // 추가: VR 파일 존재 여부
             rating: ratingValue  // 추가: rating 값
         };
     }
@@ -951,6 +953,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         cacheKey = makeitem_Store[fname].cacheKey || '';
         hasMp4 = makeitem_Store[fname].hasMp4 || false;
         hasHighImageRatio = makeitem_Store[fname].hasHighImageRatio || false;
+        hasVR = makeitem_Store[fname].hasVR || false;
         let rating = makeitem_Store[fname].rating ?? 0;
 
         console.log(`[Store] Cache for ${fname} - enterable: ${item_enterable}, img: ${item_img}, vid: ${item_vid}, need_video_load: ${need_video_load}, hasMp4: ${hasMp4}, hasHighImageRatio: ${hasHighImageRatio}, rating: ${rating}`);
@@ -1003,6 +1006,12 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             playvidBadge = `<div class="badge">
                 playvid 
                 <a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+            </div>`;
+        }
+        if (hasVR) {
+            playvidBadge += `<div class="badge">
+                playvid180 
+                <a href="${document.location.origin}${document.location.pathname}/videoview180.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
             </div>`;
         }
         let imageviewBadge = '';
