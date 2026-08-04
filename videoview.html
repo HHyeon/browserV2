@@ -118,6 +118,37 @@
                 background-color: rgba(255, 255, 255, 0.2);
             }
 
+            .bookmark-marker {
+                position: absolute;
+                top: 0;
+                width: 3px;
+                height: 100%;
+                background-color: rgba(255, 80, 80, 0.9);
+                pointer-events: auto;
+                cursor: pointer;
+                z-index: 2;
+                transition: background-color 0.15s ease;
+            }
+            .bookmark-marker:hover {
+                background-color: rgba(255, 200, 80, 1);
+                width: 5px;
+                margin-left: -1px;
+            }
+            .bookmark-marker[title]:hover::after {
+                content: attr(title);
+                position: absolute;
+                bottom: 120%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.85);
+                color: #fff;
+                font-size: 11px;
+                padding: 2px 6px;
+                border-radius: 3px;
+                white-space: nowrap;
+                pointer-events: none;
+            }
+
             #bookmark-panel {
                 position: fixed;
                 top: 5vh;
@@ -630,7 +661,7 @@
             let shuffleidx=0;
             let shuffled = false;
 
-            function onKeydown(param)
+            async function onKeydown(param)
             {
                 console.log(param.key);
 
@@ -720,8 +751,27 @@
 
                                 const nextvidpath = currentdir + '/' + currentfilename;
                                 player.src = nextvidpath; 
-                                setplaytime = true;
-                                loadBookmarksFor(nextvidpath);
+                                
+                                await loadBookmarksFor(nextvidpath);
+                                
+                                if(bookmarks.length > 0) {
+                                    const bm = bookmarks[Math.floor(Math.random() * bookmarks.length)];
+                                    setplaytime = false;
+                                    player.addEventListener('playing', () => {
+                                        if(player.duration) {
+                                            player.currentTime = Math.min(bm.time, player.duration - 0.5);
+                                        } else {
+                                            player.addEventListener('loadedmetadata', () => {
+                                                player.currentTime = Math.min(bm.time, player.duration - 0.5);
+                                            }, { once: true });
+                                        }
+                                        updateProgressPanel();
+                                        setLabelText(`bookmark - ${bm.name} (${formatTime(bm.time)})`);
+                                    }, { once: true });
+                                } else {
+                                    setplaytime = true;
+                                }
+                                
                                 console.log(`next video - ${nextvidpath}`);
 
                                 setLabelText(`${currentfilename}`);
@@ -1086,8 +1136,26 @@
                 updateProgressPanel();
             }
 
+            function renderBookmarkMarkers() {
+                progressBarContainer.querySelectorAll('.bookmark-marker').forEach(el => el.remove());
+                if (!player.duration || bookmarks.length == 0) return;
+                bookmarks.forEach(bm => {
+                    const marker = document.createElement('div');
+                    marker.className = 'bookmark-marker';
+                    const pct = (bm.time / player.duration) * 100;
+                    marker.style.left = pct + '%';
+                    marker.title = `${bm.name} (${formatTime(bm.time)})`;
+                    marker.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        seekToBookmark(bm);
+                    });
+                    progressBarContainer.appendChild(marker);
+                });
+            }
+
             function renderBookmarkPanel() {
                 bookmarkPanel.innerHTML = '';
+                renderBookmarkMarkers();
                 if (bookmarks.length == 0) {
                     bookmarkPanel.innerHTML = '<div class="bookmark-empty">no bookmarks</div>';
                     return;
@@ -1606,6 +1674,7 @@
                         
                         updateProgressPanel();
                         showProgressPanel();
+                        renderBookmarkMarkers();
                     });
 
                     video_saturate = 1.0;

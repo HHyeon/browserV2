@@ -389,6 +389,15 @@ let activeVideoLoads = 0;       // 현재 진행 중인 로드 개수
 const MAX_CONCURRENT_LOADS = 8; // 동시 로드 최대 개수
 let isPageFocused = !document.hidden; // 페이지 포커스 상태
 
+// 🔑 싱글 프레임 모드: 비디오당 1회만 썸네일 로드 후 중지
+let singleFrameMode = localStorage.getItem('singleFrameMode') === 'true';
+
+function toggleSingleFrameMode() {
+    singleFrameMode = !singleFrameMode;
+    localStorage.setItem('singleFrameMode', singleFrameMode);
+    console.log(`[SingleFrame] Mode: ${singleFrameMode ? 'ON (1 frame only)' : 'OFF (continuous)'}`);
+}
+
 // 페이지 가시성/포커스 상태 감지
 function pauseAllIntervals() {
     if (!isPageFocused) return;
@@ -531,7 +540,13 @@ const ThumbnailIntervalManager = {
             currentImgElement.src = result.base64;
             itemData.imgpath = result.base64;
             this.hideError(currentFname);
-            this.tick(currentFname, currentImgElement);
+
+            // 🔑 싱글 프레임 모드: 1회 로드 후 중지, 아닐 경우 연속 업데이트
+            if (!singleFrameMode) {
+                this.tick(currentFname, currentImgElement);
+            } else {
+                console.log(`[SingleFrame] Stopped continuous update for ${currentFname}`);
+            }
         })
         .catch(ex => {
             console.error(`[ThumbnailUpdate] Error updating ${currentFname}:`, ex);
@@ -550,6 +565,11 @@ const ThumbnailIntervalManager = {
         document.querySelectorAll('img[data-fname]').forEach(img => {
             const fname = img.dataset.fname;
             if (!this.activeItems.has(fname)) {
+                // 🔑 이미 로드된 썸네일은 건너뜀
+                const itemData = makeitem_Store[fname];
+                if (itemData && itemData.item_img && !itemData.need_video_load) {
+                    return;
+                }
                 this.start(fname, img);
             }
         });
@@ -1603,6 +1623,10 @@ document.addEventListener('keydown', (e) => {
         console.log('[Cache] Force refresh: Clearing cache and reloading');
 				
 				Reload_View();
+    }
+    else if(e.key == 's' && !typingmode && !typingmodecmd)
+    {
+        toggleSingleFrameMode();
     }
     else if(e.key == 'Backspace')
     {
