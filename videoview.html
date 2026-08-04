@@ -1561,6 +1561,11 @@
                         console.log(`random selected - ${currentfilename}`);
                     }
 
+                    // 🔑 파일로 직접 열 때 북마크 위치(t)로 이동
+                    if(!isDir && paramtime != null) {
+                        setplaytime = true;
+                    }
+
                     player = document.getElementById("player");
                     player.src = parampath;
                     loadBookmarksFor(parampath);
@@ -1583,6 +1588,7 @@
                             const sec = parseInt(player.currentTime);
                             msg = `moved - ${progress}% (${sec}s)`;
                             setLabelText(msg);
+                            paramtime = null;
                             
                         }
                         updateProgressPanel();
