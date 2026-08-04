@@ -1,0 +1,386 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Bookmarks</title>
+
+    <style>
+        * {
+            margin: 0px;
+            padding: 0px;
+        }
+
+        body {
+            background-color: rgb(25, 25, 25);
+            color: aliceblue;
+            margin: 0px;
+        }
+
+        .layer-text {
+            width: 100%;
+            position: absolute;
+            z-index: 1;
+            bottom: 0;
+            padding: 0 12px 12px;
+            box-sizing: border-box;
+        }
+
+        .layer-text h3 {
+            text-align: center;
+            font-size: 16px;
+            background-color: rgba(0, 0, 0, 0.5);
+            word-wrap: break-word;
+            word-break: break-all;
+        }
+
+        .item a {
+            padding: 3;
+            z-index: 2;
+            position: absolute;
+            width: 100%;
+            margin: 0;
+            height: 100%;
+        }
+
+        .item {
+            border: 2px solid lightgray;
+        }
+
+        .item:hover {
+            border: 2px solid #007bff;
+        }
+
+        #scroll-views {
+            width: 99%;
+            position: relative;
+        }
+
+        .layout {
+            height: 100vh;
+        }
+
+        #header {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        #header a {
+            color: rgba(100, 180, 255, 0.9);
+            text-decoration: none;
+        }
+
+        #header a:hover {
+            text-decoration: underline;
+        }
+
+        .bm-count {
+            color: rgba(255, 255, 255, 0.8);
+            margin-left: 8px;
+        }
+    </style>
+
+</head>
+<body oncontextmenu="return false">
+
+    <h1 id="MainTitle" style="position: absolute; transform: translate(100px,100px); display: none;">HelloThere</h1>
+
+    <div id="header">
+        <a href="index.html">index</a>
+        <span class="bm-count" id="bm-count"></span>
+    </div>
+
+    <div class="layout">
+        <div id="scroll-views"></div>
+    </div>
+
+    <script>
+
+        // 🔑 FFmpeg 디코딩 서버 URL — ffmpeg_config.json 에서 로드 (비어 있으면 현재 호스트 자동 감지)
+        let FFMPEG_SERVER_URL = '';
+
+        function getFfmpegUrl() {
+            return FFMPEG_SERVER_URL || `http://${location.hostname}:3002`;
+        }
+
+        fetch('ffmpeg_config.json', { cache: 'no-store' })
+            .then(res => res.ok ? res.json() : Promise.reject(new Error('not found')))
+            .then(cfg => {
+                const v = cfg && cfg.ffmpeg_server_url;
+                if (typeof v === 'string' && v.trim()) FFMPEG_SERVER_URL = v.trim();
+            })
+            .catch(() => {});
+
+        const visual_pictures_row_item_px = 600;
+        const visual_pictures_row_max = 4;
+        let visual_pictures_row = 0;
+        let visual_pictures_col = 0;
+
+        let dirlist = [];
+        let item_w, item_h;
+        let TopScrollView = document.getElementById('scroll-views');
+        let MainTitle = document.getElementById('MainTitle');
+
+        // 🔑 썸네일 큐 (FFMPEG decode 단일 프레임)
+        let bmLoadQueue = [];
+        let activeBmLoads = 0;
+        const MAX_CONCURRENT_LOADS = 8;
+
+        function enqueueThumb(imgEl, videoPath, seekTime) {
+            bmLoadQueue.push({ imgEl, videoPath, seekTime });
+            processBmLoadQueue();
+        }
+
+        function processBmLoadQueue() {
+            while (bmLoadQueue.length > 0 && activeBmLoads < MAX_CONCURRENT_LOADS) {
+                const job = bmLoadQueue.shift();
+                activeBmLoads++;
+
+                fetch(`${getFfmpegUrl()}/decode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoPath: job.videoPath, seekTime: job.seekTime })
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(result => {
+                    if (!result.success || !result.base64 || result.base64.length <= 100) return;
+                    if (!job.imgEl.isConnected) return;
+                    job.imgEl.src = result.base64;
+                })
+                .catch(ex => {
+                    console.error(`[BmThumb] decode failed ${job.videoPath} @ ${job.seekTime}s`, ex);
+                })
+                .finally(() => {
+                    activeBmLoads--;
+                    processBmLoadQueue();
+                });
+            }
+        }
+
+        // 🔑 경로 인코딩 (세그먼트별 encodeURIComponent → 슬래시 보존)
+        function encodePath(p) {
+            return p.split('/').map(seg => encodeURIComponent(seg)).join('/');
+        }
+
+        function decodePath(p) {
+            return p.split('/').map(seg => {
+                try { return decodeURIComponent(seg); } catch(e) { return seg; }
+            }).join('/');
+        }
+
+        async function loadBookmarkData() {
+            try {
+                const res = await fetch('bookmark.php?all=1', { cache: 'no-store' });
+                const json = await res.json();
+                dirlist = [];
+                if (json.ret && json.data) {
+                    for (const path of Object.keys(json.data)) {
+                        for (const bm of json.data[path]) {
+                            dirlist.push({ path: path, name: bm.name, time: bm.time, id: bm.id });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('loadBookmarkData error', e);
+                dirlist = [];
+            }
+        }
+
+        function makeitem(w, h, x, y, item) {
+            const fname = item.path.substring(item.path.lastIndexOf('/') + 1);
+            const timeText = `${item.name} (${item.time.toFixed(1)}s)`;
+            return `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; user-select: none; -webkit-user-select: none; box-sizing: border-box; overflow: hidden; pointer-events: auto;">
+                <a href="videoview.html?p=${encodePath(item.path)}&t=${item.time}" target="_blank"></a>
+                <img data-path="${encodePath(item.path)}" data-time="${item.time}" src="" alt="" style="position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false">
+                <div class="layer-text">
+                    <h3>${fname}<br><span style="font-size: 14px; color: rgba(100,180,255,0.9);">${timeText}</span></h3>
+                </div>
+            </div>`;
+        }
+
+        function enqueueItemThumbnails(itemElem) {
+            itemElem.querySelectorAll('img[data-path]').forEach(img => {
+                enqueueThumb(img, decodePath(img.dataset.path), Number(img.dataset.time));
+            });
+        }
+
+        // 🔑 인피니티 스크롤 (script.js refreshinginfinitylist 포팅, 단일 프레임)
+        let lastVisibleStart = 0;
+        let lastVisibleEnd = 0;
+
+        function eliminate_out_of_range_items(visibleItemStart, visibleItemEnd) {
+            document.querySelectorAll('[data-item-index]').forEach(el => {
+                const idxStr = el.getAttribute('data-item-index');
+                const idx = Number(idxStr);
+                if (isNaN(idx)) return;
+                if (idx < visibleItemStart || idx >= visibleItemEnd) {
+                    el.remove();
+                }
+            });
+        }
+
+        function refreshinginfinitylist(force = false) {
+            const visibleStart = scrolleditemidx;
+            const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
+            const visibleItemStart = visibleStart * visual_pictures_row;
+            const visibleItemEnd = visibleEnd * visual_pictures_row;
+
+            if (force) {
+                TopScrollView.innerHTML = '';
+                lastVisibleStart = 0;
+                lastVisibleEnd = 0;
+            }
+
+            if (lastVisibleStart === 0 && lastVisibleEnd === 0) {
+                TopScrollView.innerHTML = '';
+
+                for (let i = 0; i < visual_pictures_row * visual_pictures_col; i++) {
+                    const idx = i + (scrolleditemidx * visual_pictures_row);
+                    if (idx >= dirlist.length) break;
+
+                    const dirlist_item = dirlist[idx];
+                    const pos_x = (item_w) * (i % visual_pictures_row);
+                    const pos_y = (item_h) * (Math.floor(i / visual_pictures_row) + scrolleditemidx);
+
+                    const html = makeitem(item_w, item_h, pos_x, pos_y, dirlist_item);
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = html;
+                    const itemElem = wrapper.firstElementChild;
+                    if (itemElem) {
+                        itemElem.setAttribute('data-item-index', idx);
+                        TopScrollView.appendChild(itemElem);
+                        enqueueItemThumbnails(itemElem);
+                    }
+                }
+
+                lastVisibleStart = visibleItemStart;
+                lastVisibleEnd = Math.min(visibleItemEnd, dirlist.length);
+            }
+            else if (visibleItemStart === lastVisibleStart && visibleItemEnd === lastVisibleEnd && !force) {
+                return;
+            }
+            else {
+                const itemsToAdd = [];
+
+                if (visibleItemStart < lastVisibleStart) {
+                    if (lastVisibleStart - visibleItemStart > visual_pictures_row * visual_pictures_col) {
+                        const maxItems = visual_pictures_row * visual_pictures_col;
+                        for (let idx = visibleItemStart; idx < visibleItemStart + maxItems; idx++) {
+                            itemsToAdd.push(idx);
+                        }
+                    } else {
+                        for (let idx = visibleItemStart; idx < lastVisibleStart; idx++) {
+                            itemsToAdd.push(idx);
+                        }
+                    }
+                }
+
+                if (visibleItemEnd > lastVisibleEnd) {
+                    if (visibleItemEnd - lastVisibleEnd > visual_pictures_row * visual_pictures_col) {
+                        const maxItems = visual_pictures_row * visual_pictures_col;
+                        for (let idx = visibleItemStart; idx < visibleItemStart + maxItems; idx++) {
+                            if (!itemsToAdd.includes(idx)) itemsToAdd.push(idx);
+                        }
+                    } else {
+                        for (let idx = lastVisibleEnd; idx < visibleItemEnd; idx++) {
+                            if (!itemsToAdd.includes(idx)) itemsToAdd.push(idx);
+                        }
+                    }
+                }
+
+                for (let idx of itemsToAdd) {
+                    if (idx >= 0 && idx < dirlist.length) {
+                        const dirlist_item = dirlist[idx];
+                        const row = Math.floor(idx / visual_pictures_row);
+                        const col = idx % visual_pictures_row;
+                        const pos_x = (item_w) * col;
+                        const pos_y = (item_h) * row;
+
+                        if (!TopScrollView.querySelector(`[data-item-index="${idx}"]`) || force) {
+                            const html = makeitem(item_w, item_h, pos_x, pos_y, dirlist_item);
+                            const wrapper = document.createElement('div');
+                            wrapper.innerHTML = html;
+                            const itemElem = wrapper.firstElementChild;
+                            if (itemElem) {
+                                itemElem.setAttribute('data-item-index', idx);
+                                TopScrollView.appendChild(itemElem);
+                                enqueueItemThumbnails(itemElem);
+                            }
+                        }
+                    }
+                }
+
+                lastVisibleStart = visibleItemStart;
+                lastVisibleEnd = Math.min(visibleItemEnd, dirlist.length);
+            }
+        }
+
+        let scrolleditemidx = 0;
+        let scrolleditemidx_store = 0;
+        let scrollDebounceTimer = null;
+        const SCROLL_DEBOUNCE_DELAY = 300;
+
+        window.addEventListener("scroll", function(e) {
+            if (dirlist.length == 0) return;
+
+            scrolleditemidx = Math.floor(window.scrollY / item_h);
+
+            if (scrolleditemidx != scrolleditemidx_store) {
+                scrolleditemidx_store = scrolleditemidx;
+
+                const visibleStart = scrolleditemidx;
+                const visibleEnd = Math.min(scrolleditemidx + visual_pictures_col, Math.ceil(dirlist.length / visual_pictures_row));
+                const visibleItemStart = visibleStart * visual_pictures_row;
+                const visibleItemEnd = visibleEnd * visual_pictures_row;
+
+                eliminate_out_of_range_items(visibleItemStart, visibleItemEnd);
+            }
+
+            if (scrollDebounceTimer) {
+                clearTimeout(scrollDebounceTimer);
+            }
+            scrollDebounceTimer = setTimeout(() => {
+                refreshinginfinitylist();
+                scrollDebounceTimer = null;
+            }, SCROLL_DEBOUNCE_DELAY);
+        }, { passive: true });
+
+        async function startup() {
+            await loadBookmarkData();
+
+            const countEl = document.getElementById('bm-count');
+            if (countEl) countEl.textContent = `${dirlist.length} bookmarks`;
+
+            if (dirlist.length == 0) {
+                MainTitle.style.display = 'block';
+                MainTitle.innerText = 'no bookmarks';
+                return;
+            }
+
+            visual_pictures_row = Math.round(window.innerWidth / visual_pictures_row_item_px);
+            if (visual_pictures_row == 0) visual_pictures_row = 1;
+            if (visual_pictures_row > visual_pictures_row_max) visual_pictures_row = visual_pictures_row_max;
+
+            item_w = ((window.innerWidth - (25 / window.devicePixelRatio)) / visual_pictures_row);
+            item_h = item_w / 4 * 3;
+            visual_pictures_col = Math.floor(window.innerHeight / item_h) + 2;
+
+            TopScrollView.style.height = (Math.floor(dirlist.length / visual_pictures_row)) * item_h;
+
+            refreshinginfinitylist(true);
+        }
+
+        startup();
+
+    </script>
+
+</body>
+</html>

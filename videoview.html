@@ -117,7 +117,72 @@
             #progress-link:hover {
                 background-color: rgba(255, 255, 255, 0.2);
             }
-            
+
+            #bookmark-panel {
+                position: fixed;
+                top: 5vh;
+                right: 10px;
+                min-width: 200px;
+                max-width: 320px;
+                max-height: 60vh;
+                overflow-y: auto;
+                background-color: rgba(0, 0, 0, 0.8);
+                border-radius: 8px;
+                padding: 8px;
+                z-index: 1000;
+                box-sizing: border-box;
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 0.3s ease, visibility 0.3s ease;
+                text-align: left;
+                font-size: 14px;
+            }
+
+            #bookmark-panel.visible {
+                opacity: 1;
+                visibility: visible;
+            }
+
+            .bookmark-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 6px;
+                border-radius: 4px;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .bookmark-row:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+
+            .bookmark-row .bookmark-time {
+                color: rgba(100, 180, 255, 0.9);
+                min-width: 40px;
+            }
+
+            .bookmark-row .bookmark-name {
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                color: rgba(255, 255, 255, 0.6);
+                font-size: 12px;
+            }
+
+            .bookmark-row .bookmark-del {
+                color: rgba(255, 100, 100, 0.9);
+                padding: 0 4px;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .bookmark-empty {
+                color: rgba(255, 255, 255, 0.5);
+                padding: 8px;
+                text-align: center;
+            }
 
         </style>
     </head>
@@ -142,6 +207,8 @@
         </div>
 
         
+
+        <div id="bookmark-panel"></div>
 
         <div id="viewbox" style="visibility:hidden;">
             <div id="viewbox-zoom"></div>
@@ -287,6 +354,12 @@
                 setCookie('paramfind', '', 0);
             }
             console.log(`paramfind: ${paramfind}`);
+
+            // 🔑 북마크 갤러리에서 넘어온 재생 위치 (초)
+            let paramtime = urlParams.get('t');
+            if(paramtime != null) paramtime = parseFloat(paramtime);
+            if(paramtime != null && !Number.isFinite(paramtime)) paramtime = null;
+            console.log(`paramtime: ${paramtime}`);
 
 
             let player_paused_state = false;
@@ -648,6 +721,7 @@
                                 const nextvidpath = currentdir + '/' + currentfilename;
                                 player.src = nextvidpath; 
                                 setplaytime = true;
+                                loadBookmarksFor(nextvidpath);
                                 console.log(`next video - ${nextvidpath}`);
 
                                 setLabelText(`${currentfilename}`);
@@ -671,6 +745,7 @@
                                 currentfilename = dirlist[currentfileidx]['d'];
 
                                 player.src = nextvidpath; 
+                                loadBookmarksFor(nextvidpath);
                                 console.log(`next video - ${nextvidpath}`);
 
                                 setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
@@ -696,6 +771,7 @@
                                 currentfilename = dirlist[currentfileidx]['d'];
 
                                 player.src = nextvidpath; 
+                                loadBookmarksFor(nextvidpath);
                                 console.log(`prev video - ${nextvidpath}`);
 
                                 setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
@@ -876,6 +952,42 @@
                             video_filter_set();
                         }
                         break;
+
+                    case 'b':
+                        {
+                            if(!player.duration || !currentVideoPath) break;
+                            const t = player.currentTime;
+                            bookmarkAdd(currentVideoPath, t, formatTime(t));
+                            setLabelText(`bookmark saved - ${formatTime(t)}`);
+                        }
+                        break;
+
+                    case 'B':
+                        toggleBookmarkPanel();
+                        break;
+
+                    case 'n':
+                        {
+                            if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
+                            const ct = player.currentTime;
+                            let next = bookmarks.find(b => b.time > ct + 0.5);
+                            if(next == undefined) next = bookmarks[0];
+                            seekToBookmark(next);
+                        }
+                        break;
+
+                    case 'p':
+                        {
+                            if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
+                            const ct = player.currentTime;
+                            let prev;
+                            for(let i=bookmarks.length-1;i>=0;i--) {
+                                if(bookmarks[i].time < ct - 0.5) { prev = bookmarks[i]; break; }
+                            }
+                            if(prev == undefined) prev = bookmarks[bookmarks.length-1];
+                            seekToBookmark(prev);
+                        }
+                        break;
                 }
             }
 
@@ -908,6 +1020,115 @@
             const progressBarContainer = document.getElementById('progress-bar-container');
             const progressLink = document.getElementById('progress-link');
             progressLink.href = window.location.href;
+
+            // 🔑 북마크 기능
+            let bookmarks = [];
+            let currentVideoPath = '';
+            let bookmarkPanelVisible = false;
+            const bookmarkPanel = document.getElementById('bookmark-panel');
+
+            async function bookmarkFetch(path) {
+                try {
+                    const res = await fetch(`bookmark.php?path=${encodeURIComponent(path)}`, { cache: 'no-store' });
+                    const json = await res.json();
+                    return json.ret ? json.bookmarks : [];
+                } catch (e) {
+                    console.error('bookmarkFetch error', e);
+                    return [];
+                }
+            }
+
+            async function bookmarkAdd(path, time, name) {
+                try {
+                    const res = await fetch('bookmark.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'add', path: path, time: time, name: name })
+                    });
+                    const json = await res.json();
+                    if (json.ret) bookmarks = json.bookmarks;
+                    renderBookmarkPanel();
+                    return json.ret;
+                } catch (e) {
+                    console.error('bookmarkAdd error', e);
+                    return false;
+                }
+            }
+
+            async function bookmarkRemove(path, id) {
+                try {
+                    const res = await fetch('bookmark.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'remove', path: path, id: id })
+                    });
+                    const json = await res.json();
+                    if (json.ret) bookmarks = json.bookmarks;
+                    renderBookmarkPanel();
+                    return json.ret;
+                } catch (e) {
+                    console.error('bookmarkRemove error', e);
+                    return false;
+                }
+            }
+
+            async function loadBookmarksFor(path) {
+                currentVideoPath = path;
+                bookmarks = await bookmarkFetch(path);
+                renderBookmarkPanel();
+            }
+
+            function seekToBookmark(bm) {
+                if(!player.duration) return;
+                player.currentTime = Math.min(bm.time, player.duration - 0.5);
+                const progress = (player.currentTime / player.duration * 100).toFixed(2);
+                setLabelText(`bookmark - ${bm.name} (${progress}%)`);
+                updateProgressPanel();
+            }
+
+            function renderBookmarkPanel() {
+                bookmarkPanel.innerHTML = '';
+                if (bookmarks.length == 0) {
+                    bookmarkPanel.innerHTML = '<div class="bookmark-empty">no bookmarks</div>';
+                    return;
+                }
+                bookmarks.forEach(bm => {
+                    const row = document.createElement('div');
+                    row.className = 'bookmark-row';
+                    row.title = `${bm.name} @ ${bm.time}s`;
+
+                    const timeEl = document.createElement('span');
+                    timeEl.className = 'bookmark-time';
+                    timeEl.textContent = bm.name;
+
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'bookmark-name';
+                    nameEl.textContent = `${bm.time.toFixed(1)}s`;
+
+                    const delEl = document.createElement('span');
+                    delEl.className = 'bookmark-del';
+                    delEl.textContent = '×';
+                    delEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        bookmarkRemove(currentVideoPath, bm.id);
+                    });
+
+                    row.appendChild(timeEl);
+                    row.appendChild(nameEl);
+                    row.appendChild(delEl);
+                    row.addEventListener('click', () => {
+                        seekToBookmark(bm);
+                        toggleBookmarkPanel(false);
+                    });
+
+                    bookmarkPanel.appendChild(row);
+                });
+            }
+
+            function toggleBookmarkPanel(force) {
+                bookmarkPanelVisible = (force !== undefined) ? force : !bookmarkPanelVisible;
+                bookmarkPanel.classList.toggle('visible', bookmarkPanelVisible);
+            }
 
             progressLink.addEventListener('contextmenu', (e) => {
                 e.stopPropagation();
@@ -1017,7 +1238,9 @@
                         {
                             const targetElement = document.elementFromPoint(param.clientX, param.clientY);
                             if(targetElement && (targetElement.id === 'progress-panel' || 
-                                targetElement.closest('#progress-panel'))) {
+                                targetElement.closest('#progress-panel') ||
+                                targetElement.id === 'bookmark-panel' ||
+                                targetElement.closest('#bookmark-panel'))) {
                                 break;
                             }
                             mouselongpressedcheckTimer = setTimeout(mouseLClickLongPressed, 200);
@@ -1340,12 +1563,20 @@
 
                     player = document.getElementById("player");
                     player.src = parampath;
+                    loadBookmarksFor(parampath);
                     player.addEventListener("playing", () => {
                         if(setplaytime)
                         {
                             setplaytime = false;
-                            const duration_block = player.duration / 10;
-                            player.currentTime = duration_block + (duration_block * (Math.random()*3.0));
+                            let seekto;
+                            if(paramtime != null && player.duration) {
+                                seekto = Math.min(paramtime, player.duration - 1);
+                            }
+                            else {
+                                const duration_block = player.duration / 10;
+                                seekto = duration_block + (duration_block * (Math.random()*3.0));
+                            }
+                            player.currentTime = seekto;
                             console.log(player.currentTime);
                             
                             const progress = (player.currentTime / player.duration * 100).toFixed(2);

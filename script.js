@@ -1,5 +1,18 @@
 
-const FFMPEG_SERVER_URL = 'http://192.168.0.101:3002'; // 🔑 FFmpeg 디코딩 서버 URL
+// 🔑 FFmpeg 디코딩 서버 URL — ffmpeg_config.json 에서 로드 (비어 있으면 현재 호스트 자동 감지)
+let FFMPEG_SERVER_URL = '';
+
+function getFfmpegUrl() {
+    return FFMPEG_SERVER_URL || `http://${location.hostname}:3002`;
+}
+
+fetch('ffmpeg_config.json', { cache: 'no-store' })
+    .then(res => res.ok ? res.json() : Promise.reject(new Error('not found')))
+    .then(cfg => {
+        const v = cfg && cfg.ffmpeg_server_url;
+        if (typeof v === 'string' && v.trim()) FFMPEG_SERVER_URL = v.trim();
+    })
+    .catch(() => {});
 
 
 
@@ -499,7 +512,7 @@ const ThumbnailIntervalManager = {
 
         this.updateProgress(fname, seekTime, videoDuration, progressBar);
 
-        fetch(`${FFMPEG_SERVER_URL}/decode`, {
+        fetch(`${getFfmpegUrl()}/decode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ videoPath: itemData.videoPath, seekTime: seekTime })
@@ -667,9 +680,9 @@ async function processVideoLoadQueue() {
         let seekTime = (Math.random() * videoDuration).toFixed(1);
         if(seekTime < 30) seekTime = 30; // minimum 30s start
 
-        console.log(`[FFmpeg] Decoding ${videoInfo.name} at ${seekTime}s via ${FFMPEG_SERVER_URL}`);
+        console.log(`[FFmpeg] Decoding ${videoInfo.name} at ${seekTime}s via ${getFfmpegUrl()}`);
 
-        fetch(`${FFMPEG_SERVER_URL}/decode`, {
+        fetch(`${getFfmpegUrl()}/decode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ videoPath, seekTime })
