@@ -27,6 +27,22 @@ else
 if(parampath == null) parampath = '.';
 // console.log(`parampath - ${parampath}`);
 
+// 🔑 경로별 설정 (listordertype, ratingordertoggle): localStorage 단일 JSON 맵
+function getPathPrefs() {
+    try { return JSON.parse(localStorage.getItem('listordertype_paths') || '{}'); }
+    catch(e) { return {}; }
+}
+
+function getPathPref() {
+    return getPathPrefs()[parampath] || {};
+}
+
+function setPathPref(patch) {
+    const prefs = getPathPrefs();
+    prefs[parampath] = { ...(prefs[parampath] || {}), ...patch };
+    localStorage.setItem('listordertype_paths', JSON.stringify(prefs));
+}
+
 
 let dirlist = [];
 let item_w, item_h;
@@ -56,31 +72,29 @@ async function dirseek(param) {
     }
 }
 
-async function getRating(folderName) {
-    try {
-        const res = await fetch(`rate.php?name=${encodeURIComponent(folderName)}`);
-        const json = await res.json();
-        return json.ret ? json.value : 0;
-    } catch (e) {
-        console.error('getRating error', e);
-        return 0;
-    }
+// 🔑 별점: localStorage 저장 (전체 경로 키, 서버 rate.php 대체)
+function getRatingsMap() {
+    try { return JSON.parse(localStorage.getItem('ratings') || '{}'); }
+    catch(e) { return {}; }
 }
 
-async function setRating(folderName, value) {
-    try {
-        const res = await fetch('rate.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, value: value })
-        });
-        const json = await res.json();
-				console.log(`${json}`);
-        return json.ret;
-    } catch (e) {
-        console.error('setRating error', e);
-        return false;
-    }
+function setRatingsMap(map) {
+    localStorage.setItem('ratings', JSON.stringify(map));
+}
+
+function ratingKey(folderName) {
+    return `${parampath}/${folderName}`;
+}
+
+function getRating(folderName) {
+    return getRatingsMap()[ratingKey(folderName)] || 0;
+}
+
+function setRating(folderName, value) {
+    const map = getRatingsMap();
+    map[ratingKey(folderName)] = value;
+    setRatingsMap(map);
+    return true;
 }
 
 
@@ -927,7 +941,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         }
         
         // 🔑 makeitem_Store에 cacheKey도 저장 (processVideoLoadQueue에서 사용)
-        const ratingValue = await getRating(fname);
+        const ratingValue = getRating(fname);
         makeitem_Store[fname] = {
             fname: fname,
             item_enterable: item_enterable,
@@ -1027,7 +1041,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             // </div>`;
         }
 
-        const currentRating = makeitem_stored?.rating ?? (await getRating(fname));
+        const currentRating = makeitem_stored?.rating ?? getRating(fname);
         const ratingBadge = `
         <div class="rating-container" data-rating-fname="${fname}">
             <div class="rating-btn" onclick="onRatingUp('${fname}')">▲</div>
@@ -1176,8 +1190,13 @@ async function startup() {
 				sidebar.classList.remove('visible');
 		}
 
-    let ordertype = localStorage.getItem('listordertype');
+    const pathPref = getPathPref();
 
+    let ordertype = pathPref.order;
+    if(ordertype == null)
+    {
+        ordertype = localStorage.getItem('listordertype');
+    }
     if(ordertype == null)
     {
         ordertype = 1;
@@ -1185,7 +1204,11 @@ async function startup() {
 		
     console.log(`ordertype - ${ordertype}`);
 		
-    ratingordertoggleState = localStorage.getItem('ratingordertoggle');
+    ratingordertoggleState = pathPref.ratingToggle;
+    if(ratingordertoggleState == null)
+    {
+        ratingordertoggleState = localStorage.getItem('ratingordertoggle');
+    }
     if(ratingordertoggleState == null) ratingordertoggleState = false;
     
     if(ratingordertoggleState == 'true') ratingordertoggleState = true;
@@ -1293,11 +1316,9 @@ async function startup() {
 
             if(ratingordertoggleState === true)
             {
-                const ratingPromises = dirlist.map(async (item) => {
-                    item.rating = await getRating(item.fname);
-                    return item;
+                dirlist.forEach(item => {
+                    item.rating = getRating(item.fname);
                 });
-                await Promise.all(ratingPromises);
                 const randomSeed = Math.random() * 0xFFFFFFFF;
                 dirlist = shuffleWithSeed(dirlist, randomSeed);
                 dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
@@ -1381,7 +1402,7 @@ function setordertype(type)
 {
     if(type >= 1 && type <= 4)
     {
-        localStorage.setItem('listordertype', type); // time
+        setPathPref({ order: type });
 
         console.log(`startup with setordertype - ${type}`);
         startup();
@@ -1395,7 +1416,7 @@ function setRatingOrderToggle()
 {
 	ratingordertoggleState = !ratingordertoggleState;
 	
-	localStorage.setItem('ratingordertoggle', ratingordertoggleState);
+	setPathPref({ ratingToggle: ratingordertoggleState });
 	console.log(`ratingordertoggleState - ${ratingordertoggleState}`);
 
 	startup();
@@ -1408,33 +1429,25 @@ function commandtyped(cmd)
 }
 
 function onRatingUp(fname) {
-    (async () => {
-        const currentRating = makeitem_Store[fname]?.rating ?? 0;
-        const newRating = currentRating + 1;
-        const success = await setRating(fname, newRating);
-        if (success) {
-            makeitem_Store[fname].rating = newRating;
-            document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
-                el.textContent = newRating;
-            });
-        }
-        console.log(`Rating UP: ${fname} -> ${newRating}`);
-    })();
+    const currentRating = makeitem_Store[fname]?.rating ?? 0;
+    const newRating = currentRating + 1;
+    setRating(fname, newRating);
+    makeitem_Store[fname].rating = newRating;
+    document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
+        el.textContent = newRating;
+    });
+    console.log(`Rating UP: ${fname} -> ${newRating}`);
 }
 
 function onRatingDown(fname) {
-    (async () => {
-        const currentRating = makeitem_Store[fname]?.rating ?? 0;
-        const newRating = currentRating - 1;
-        const success = await setRating(fname, newRating);
-        if (success) {
-            makeitem_Store[fname].rating = newRating;
-            document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
-                el.textContent = newRating;
-            });
-        }
-        console.log(`Rating DOWN: ${fname} -> ${newRating}`);
-    })();
+    const currentRating = makeitem_Store[fname]?.rating ?? 0;
+    const newRating = currentRating - 1;
+    setRating(fname, newRating);
+    makeitem_Store[fname].rating = newRating;
+    document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
+        el.textContent = newRating;
+    });
+    console.log(`Rating DOWN: ${fname} -> ${newRating}`);
 }
 
 let typingmodecmd = false;
