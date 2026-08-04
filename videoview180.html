@@ -416,6 +416,8 @@
             // }
 
             let setplaytime = false;
+            let shuffled = false;
+            let shuffleidx = 0;
             // let videozoomfactor = 1.00;
             // let videozoomposY = 0;
 
@@ -524,7 +526,7 @@
 
             window.addEventListener("keydown", onKeydown);
             
-            function onKeydown(param)
+            async function onKeydown(param)
             {
                 console.log(param.key);
 
@@ -598,80 +600,97 @@
                     // break;
                     
 
-                    // case '\\':
-                    //     {
-                    //         if(dirlist.length > 1)
-                    //         {
-                    //             let randomitem;
-                    //             do
-                    //             {
-                    //                 randomitem = dirlist[Math.floor(Math.random()*dirlist.length)];
-                    //             } while(randomitem['d'] == currentfilename);
-                    //             currentfilename = randomitem['d'];
+                    case '\\':
+                        {
+                            if(dirlist.length > 1)
+                            {
+                                if(!shuffled)
+                                {
+                                    shuffleidx = 0;
+                                    dirlist.sort(() => Math.random() - 0.5);
+                                    shuffled = true;
+                                }
 
-                    //             // console.log(`randomitem - ${currentfilename}`);
+                                currentfilename = dirlist[shuffleidx]['d'];
+                                shuffleidx++;
+                                if(shuffleidx >= dirlist.length) shuffleidx = 0;
 
-                    //             const nextvidpath = currentdir + '/' + currentfilename;
-                    //             player.src = nextvidpath; 
-                    //             setplaytime = true;
-                    //             console.log(`next video - ${nextvidpath}`);
+                                const nextvidpath = currentdir + '/' + currentfilename;
+                                player.src = nextvidpath; 
+                                player.play();
 
-                    //             setLabelText(`${currentfilename}`);
+                                await loadBookmarksFor(nextvidpath);
+
+                                if(bookmarks.length > 0) {
+                                    const bm = bookmarks[Math.floor(Math.random() * bookmarks.length)];
+                                    setplaytime = false;
+                                    player.addEventListener('playing', () => {
+                                        if(player.duration) {
+                                            player.currentTime = Math.min(bm.time, player.duration - 0.5);
+                                        } else {
+                                            player.addEventListener('loadedmetadata', () => {
+                                                player.currentTime = Math.min(bm.time, player.duration - 0.5);
+                                            }, { once: true });
+                                        }
+                                        updateProgressPanel();
+                                        setLabelText(`bookmark - ${bm.name} (${formatTime(bm.time)})`);
+                                    }, { once: true });
+                                } else {
+                                    setplaytime = true;
+                                }
+
+                                console.log(`next video - ${nextvidpath}`);
+                                setLabelText(`${currentfilename}`);
+                            }
+                        }
+                    break;
+
+
+                    case ']':
+                    case 'PageDown':
+                        {
+                            let currentfileidx = dirlist.findIndex((a)=> {return a['d']==currentfilename});
+
+                            if(currentfileidx != -1)
+                            {
+                                currentfileidx++;
                                 
-                    //             init();
-                    //         }
-                    //     }
-                    // break;
+                                if(currentfileidx >= dirlist.length) currentfileidx = 0;
+                                const nextvidpath = currentdir + '/' + dirlist[currentfileidx]['d'];
+                                currentfilename = dirlist[currentfileidx]['d'];
 
+                                player.src = nextvidpath; 
+                                player.play();
+                                loadBookmarksFor(nextvidpath);
+                                console.log(`next video - ${nextvidpath}`);
 
-                    // case ']':
-                    // case 'PageDown':
-                    //     {
-                    //         let currentfileidx = dirlist.findIndex((a)=> {return a['d']==currentfilename});
+                                setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
+                            }
+                        }
+                    break;
 
-                    //         if(currentfileidx != -1)
-                    //         {
-                    //             currentfileidx++;
+                    case '[':
+                    case 'PageUp':
+                        {
+                            let currentfileidx = dirlist.findIndex((a)=> {return a['d']==currentfilename});
+
+                            if(currentfileidx != -1)
+                            {
+                                currentfileidx--;
                                 
-                    //             if(currentfileidx >= dirlist.length) currentfileidx = 0;
-                    //             const nextvidpath = currentdir + '/' + dirlist[currentfileidx]['d'];
-                    //             currentfilename = dirlist[currentfileidx]['d'];
+                                if(currentfileidx < 0) currentfileidx = dirlist.length-1;
+                                const nextvidpath = currentdir + '/' + dirlist[currentfileidx]['d'];
+                                currentfilename = dirlist[currentfileidx]['d'];
 
-                    //             player.src = nextvidpath; 
-                    //             console.log(`next video - ${nextvidpath}`);
+                                player.src = nextvidpath; 
+                                player.play();
+                                loadBookmarksFor(nextvidpath);
+                                console.log(`prev video - ${nextvidpath}`);
 
-                    //             setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
-                                
-                    //             // let newpage = `./videoview.html?p=${nextvidpath}`;
-                    //             // location.replace(newpage);
-                    //         }
-                    //     }
-
-                    // break;
-
-                    // case '[':
-                    // case 'PageUp':
-                    //     {
-                    //         let currentfileidx = dirlist.findIndex((a)=> {return a['d']==currentfilename});
-
-                    //         if(currentfileidx != -1)
-                    //         {
-                    //             currentfileidx--;
-                                
-                    //             if(currentfileidx < 0) currentfileidx = dirlist.length-1;
-                    //             const nextvidpath = currentdir + '/' + dirlist[currentfileidx]['d'];
-                    //             currentfilename = dirlist[currentfileidx]['d'];
-
-                    //             player.src = nextvidpath; 
-                    //             console.log(`prev video - ${nextvidpath}`);
-
-                    //             setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
-                                
-                    //             // let newpage = `./videoview.html?p=${nextvidpath}`;
-                    //             // location.replace(newpage);
-                    //         }
-                    //     }
-                    // break;
+                                setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
+                            }
+                        }
+                    break;
 
 
                     // case '(':
