@@ -3,7 +3,7 @@
 let FFMPEG_SERVER_URL = '';
 
 function getFfmpegUrl() {
-    return FFMPEG_SERVER_URL || `http://${location.hostname}:3002`;
+    return FFMPEG_SERVER_URL || `http://192.168.0.101:3002`;
 }
 
 fetch('ffmpeg_config.json', { cache: 'no-store' })
@@ -85,29 +85,31 @@ async function dirseek(param) {
     }
 }
 
-// 🔑 별점: localStorage 저장 (전체 경로 키, 서버 rate.php 대체)
-function getRatingsMap() {
-    try { return JSON.parse(localStorage.getItem('ratings') || '{}'); }
-    catch(e) { return {}; }
+// 🔑 별점: rate.php 서버 저장
+async function getRating(folderName) {
+    try {
+        const res = await fetch(`rate.php?name=${encodeURIComponent(folderName)}`);
+        const json = await res.json();
+        return json.ret ? json.value : 0;
+    } catch (e) {
+        console.error('getRating error', e);
+        return 0;
+    }
 }
 
-function setRatingsMap(map) {
-    localStorage.setItem('ratings', JSON.stringify(map));
-}
-
-function ratingKey(folderName) {
-    return `${parampath}/${folderName}`;
-}
-
-function getRating(folderName) {
-    return getRatingsMap()[ratingKey(folderName)] || 0;
-}
-
-function setRating(folderName, value) {
-    const map = getRatingsMap();
-    map[ratingKey(folderName)] = value;
-    setRatingsMap(map);
-    return true;
+async function setRating(folderName, value) {
+    try {
+        const res = await fetch('rate.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, value: value })
+        });
+        const json = await res.json();
+        return json.ret;
+    } catch (e) {
+        console.error('setRating error', e);
+        return false;
+    }
 }
 
 
@@ -954,7 +956,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         }
         
         // 🔑 makeitem_Store에 cacheKey도 저장 (processVideoLoadQueue에서 사용)
-        const ratingValue = getRating(fname);
+        const ratingValue = await getRating(fname);
         makeitem_Store[fname] = {
             fname: fname,
             item_enterable: item_enterable,
@@ -1054,7 +1056,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
             // </div>`;
         }
 
-        const currentRating = makeitem_stored?.rating ?? getRating(fname);
+        const currentRating = makeitem_stored?.rating ?? (await getRating(fname));
         const ratingBadge = `
         <div class="rating-container" data-rating-fname="${fname}">
             <div class="rating-btn" onclick="onRatingUp('${fname}')">▲</div>
@@ -1185,6 +1187,12 @@ explorer_open_btn.addEventListener('click', () => {
     {
         console.log(`expect "drvs/" (${belowpath})`);
     }
+});
+
+const bookmarks_open_btn = document.getElementById('btn-open-bookmarks');
+
+bookmarks_open_btn.addEventListener('click', () => {
+    window.open(`${document.location.origin}${document.location.pathname}/bookmarks.html?p=${parampath || ''}`, '_blank');
 });
 
 let startupprocessing = false;
@@ -1329,9 +1337,10 @@ async function startup() {
 
             if(ratingordertoggleState === true)
             {
-                dirlist.forEach(item => {
-                    item.rating = getRating(item.fname);
+                const ratingPromises = dirlist.map(async (item) => {
+                    item.rating = await getRating(item.fname);
                 });
+                await Promise.all(ratingPromises);
                 const randomSeed = Math.random() * 0xFFFFFFFF;
                 dirlist = shuffleWithSeed(dirlist, randomSeed);
                 dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
@@ -1441,26 +1450,30 @@ function commandtyped(cmd)
     console.log(`cmd - ${cmd}`);
 }
 
-function onRatingUp(fname) {
+async function onRatingUp(fname) {
     const currentRating = makeitem_Store[fname]?.rating ?? 0;
     const newRating = currentRating + 1;
-    setRating(fname, newRating);
-    makeitem_Store[fname].rating = newRating;
-    document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
-        el.textContent = newRating;
-    });
-    console.log(`Rating UP: ${fname} -> ${newRating}`);
+    const success = await setRating(fname, newRating);
+    if (success) {
+        makeitem_Store[fname].rating = newRating;
+        document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
+            el.textContent = newRating;
+        });
+    }
+    console.log(`Rating UP: ${fname} -> ${newRating} (saved: ${success})`);
 }
 
-function onRatingDown(fname) {
+async function onRatingDown(fname) {
     const currentRating = makeitem_Store[fname]?.rating ?? 0;
     const newRating = currentRating - 1;
-    setRating(fname, newRating);
-    makeitem_Store[fname].rating = newRating;
-    document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
-        el.textContent = newRating;
-    });
-    console.log(`Rating DOWN: ${fname} -> ${newRating}`);
+    const success = await setRating(fname, newRating);
+    if (success) {
+        makeitem_Store[fname].rating = newRating;
+        document.querySelectorAll(`[data-rating-fname="${fname}"] .rating-value`).forEach(el => {
+            el.textContent = newRating;
+        });
+    }
+    console.log(`Rating DOWN: ${fname} -> ${newRating} (saved: ${success})`);
 }
 
 let typingmodecmd = false;

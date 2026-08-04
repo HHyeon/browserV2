@@ -93,6 +93,7 @@
     <div id="header">
         <a href="index.html">index</a>
         <span class="bm-count" id="bm-count"></span>
+        <span class="bm-count" id="bm-path"></span>
     </div>
 
     <div class="layout">
@@ -105,7 +106,7 @@
         let FFMPEG_SERVER_URL = '';
 
         function getFfmpegUrl() {
-            return FFMPEG_SERVER_URL || `http://${location.hostname}:3002`;
+            return FFMPEG_SERVER_URL || `http://192.168.0.101:3002`;
         }
 
         fetch('ffmpeg_config.json', { cache: 'no-store' })
@@ -125,6 +126,10 @@
         let item_w, item_h;
         let TopScrollView = document.getElementById('scroll-views');
         let MainTitle = document.getElementById('MainTitle');
+
+        // 🔑 현재 디렉터리 필터 — p 파라미터가 비어 있으면 전체 출력
+        const bmUrlParams = new URL(window.location.href).searchParams;
+        const filterPath = (bmUrlParams.get('p') || '').replace(/\/+$/, '');
 
         // 🔑 썸네일 큐 (FFMPEG decode 단일 프레임)
         let bmLoadQueue = [];
@@ -183,6 +188,10 @@
                 dirlist = [];
                 if (json.ret && json.data) {
                     for (const path of Object.keys(json.data)) {
+                        if (filterPath) {
+                            const dir = path.substring(0, path.lastIndexOf('/'));
+                            if (dir.replace(/\/+$/, '') !== filterPath) continue;
+                        }
                         for (const bm of json.data[path]) {
                             dirlist.push({ path: path, name: bm.name, time: bm.time, id: bm.id });
                         }
@@ -358,6 +367,8 @@
 
             const countEl = document.getElementById('bm-count');
             if (countEl) countEl.textContent = `${dirlist.length} bookmarks`;
+            const pathEl = document.getElementById('bm-path');
+            if (pathEl) pathEl.textContent = filterPath ? ` | ${filterPath}` : '';
 
             if (dirlist.length == 0) {
                 MainTitle.style.display = 'block';
