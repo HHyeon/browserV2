@@ -24,6 +24,7 @@ let camera2D;
 let cameraRotation = { yaw: 0, pitch: 0 };
 let cameraVelocity = { yaw: 0, pitch: 0 };
 let isDragging = false;
+window.getIsDragging = () => isDragging;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let lastTouchX = 0;
