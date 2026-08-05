@@ -1296,7 +1296,8 @@
                 if(progressHideTimer) clearTimeout(progressHideTimer);
                 progressPanel.style.opacity = '1';
                 progressPanel.style.visibility = 'visible';
-                if(!keepVisible) {
+                const hovering = progressPanel.matches(':hover');
+                if(!keepVisible && !hovering) {
                     progressHideTimer = setTimeout(() => {
                         progressPanel.style.opacity = '0';
                         progressPanel.style.visibility = 'hidden';
@@ -1394,6 +1395,14 @@
                     progressPanelDragging = false;
                     progressPanel.style.cursor = '';
                 }
+            });
+
+            progressPanel.addEventListener('mouseenter', () => {
+                showProgressPanel(true);
+            });
+
+            progressPanel.addEventListener('mouseleave', () => {
+                if(!progressPanelDragging) showProgressPanel();
             });
 
 

@@ -49,6 +49,13 @@
             border: 2px solid #007bff;
         }
 
+        .item img.vr-half {
+            width: 200% !important;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
         #scroll-views {
             width: 99%;
             position: relative;
@@ -221,6 +228,7 @@
 
         function applyTabFilter() {
             dirlist = allBookmarks.filter(b => currentTab === 'all' || (currentTab === 'vr') === b.vr);
+            dirlist.sort(() => Math.random() - 0.5);
         }
 
         async function loadBookmarkData() {
@@ -230,18 +238,29 @@
                     { mode: '', vr: false },
                     { mode: 'vr', vr: true }
                 ];
+                // 🔑 현재 폴더 하위 보기 시 파일당 북마크 1개만 표시 (마지막 기록 우선)
+                const lastByPath = {};
                 for (const src of sources) {
                     const res = await fetch(`bookmark.php?all=1${src.mode ? '&mode=' + src.mode : ''}`, { cache: 'no-store' });
                     const json = await res.json();
                     if (!(json.ret && json.data)) continue;
                     for (const path of Object.keys(json.data)) {
                         if (filterPath) {
-                            const dir = path.substring(0, path.lastIndexOf('/'));
-                            if (dir.replace(/\/+$/, '') !== filterPath) continue;
+                            if (!path.startsWith(filterPath + '/')) continue;
                         }
                         for (const bm of json.data[path]) {
-                            allBookmarks.push({ path: path, name: bm.name, time: bm.time, id: bm.id, vr: src.vr });
+                            const entry = { path: path, name: bm.name, time: bm.time, id: bm.id, vr: src.vr };
+                            if (filterPath) {
+                                lastByPath[path] = entry;
+                            } else {
+                                allBookmarks.push(entry);
+                            }
                         }
+                    }
+                }
+                if (filterPath) {
+                    for (const path of Object.keys(lastByPath)) {
+                        allBookmarks.push(lastByPath[path]);
                     }
                 }
             } catch (e) {
@@ -285,7 +304,7 @@
             const viewer = item.vr ? 'videoview180.html' : 'videoview.html';
             return `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; user-select: none; -webkit-user-select: none; box-sizing: border-box; overflow: hidden; pointer-events: auto;">
                 <a href="${viewer}?p=${encodePath(item.path)}&t=${item.time}" target="_blank"></a>
-                <img data-path="${encodePath(item.path)}" data-time="${item.time}" src="" alt="" style="position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false">
+                <img data-path="${encodePath(item.path)}" data-time="${item.time}" src="" alt="" class="${item.vr ? 'vr-half' : ''}" style="position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false">
                 <div class="layer-text">
                     <h3>${fname}<br><span style="font-size: 14px; color: rgba(100,180,255,0.9);">${timeText}</span></h3>
                 </div>
