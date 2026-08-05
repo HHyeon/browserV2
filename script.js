@@ -533,13 +533,15 @@ const ThumbnailIntervalManager = {
             return response.json();
         })
         .then(result => {
-            if (!isPageFocused || document.hidden) return;
-            if (!this.activeItems.has(currentFname)) return;
             if (!result.success || !result.base64 || result.base64.length <= 100) return;
             if (!currentImgElement.isConnected) return;
             currentImgElement.src = result.base64;
             itemData.imgpath = result.base64;
             this.hideError(currentFname);
+
+            // 🔑 pause 시: 현재 디코딩 결과까지는 적용하고 다음 tick은 중지
+            if (!isPageFocused || document.hidden) return;
+            if (!this.activeItems.has(currentFname)) return;
 
             // 🔑 싱글 프레임 모드: 1회 로드 후 중지, 아닐 경우 연속 업데이트
             if (!singleFrameMode) {
@@ -565,9 +567,10 @@ const ThumbnailIntervalManager = {
         document.querySelectorAll('img[data-fname]').forEach(img => {
             const fname = img.dataset.fname;
             if (!this.activeItems.has(fname)) {
-                // 🔑 이미 로드된 썸네일은 건너뜀
+                // 🔑 싱글 프레임 모드에서만 이미 로드된 썸네일은 건너뜀
+                // (연속 모드에서는 focus 시 바로 연속 로딩 재개)
                 const itemData = makeitem_Store[fname];
-                if (itemData && itemData.item_img && !itemData.need_video_load) {
+                if (singleFrameMode && itemData && itemData.item_img && !itemData.need_video_load) {
                     return;
                 }
                 this.start(fname, img);
@@ -1181,39 +1184,22 @@ function formatYYYYMMDD(date) {
 }
 
 
-const explorer_open_btn = document.getElementById('btn-open-explorer');
-
-explorer_open_btn.addEventListener('click', () => {
-
-    const belowpath = parampath;
-    let belowpathlink = "";
-
-    if(belowpath.substr(0, 5) == 'drvs/')
-    {
-        belowpathlink = document.location.origin + "\\" + belowpath.substring(5, belowpath.length);
-        belowpathlink = belowpathlink.substring(5, belowpathlink.length);
-        belowpathlink = belowpathlink.replaceAll("/", "\\");
-
-        //example - `maxview://open?path=\\192.168.100.101\drive_5\contents`
-        //          `winexplr://open?path=\\192.168.100.101\drive_5\contents`
-        
-        belowpathlink = `winexplr://open?path=${belowpathlink}`;
-
-        console.log(`winexplr link - ${belowpathlink}`);
-        
-        window.location.href = belowpathlink;
-    }
-    else
-    {
-        console.log(`expect "drvs/" (${belowpath})`);
-    }
-});
-
-const bookmarks_open_btn = document.getElementById('btn-open-bookmarks');
-
-bookmarks_open_btn.addEventListener('click', () => {
+function openBookmarks() {
     window.open(`${document.location.origin}${document.location.pathname}/bookmarks.html?p=${parampath || ''}`, '_blank');
-});
+}
+
+let actionToastTimer = null;
+
+function showActionToast(message) {
+    const toast = document.getElementById('action-toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    if (actionToastTimer) clearTimeout(actionToastTimer);
+    actionToastTimer = setTimeout(() => {
+        toast.style.opacity = '0';
+    }, 1000);
+}
 
 let startupprocessing = false;
 
@@ -1226,11 +1212,6 @@ async function startup() {
 
     startupprocessing = true;
 		
-		const sidebar = document.getElementById('sidebar');
-		if (sidebar) {
-				sidebar.classList.remove('visible');
-		}
-
     const pathPref = getPathPref();
 
     let ordertype = pathPref.order;
@@ -1258,12 +1239,11 @@ async function startup() {
     console.log(`ratingordertoggleState: ${ratingordertoggleState}`);
     
 
-    const ratingBtn = document.getElementById('btn-rating-toggle');
-    if(ratingBtn) {
-        if(ratingordertoggleState === true)
-            ratingBtn.classList.add('active');
-        else
-            ratingBtn.classList.remove('active');
+    // 🔑 첫 로드 시 현재 정렬 방식 표시
+    if(!initialToastShown)
+    {
+        initialToastShown = true;
+        showActionToast(sortModeMessages[ordertype] || `Sort: ${ordertype}`);
     }
 
     dirlist = [];
@@ -1313,24 +1293,6 @@ async function startup() {
         }
 
         if(dirlist.length > 0) {
-
-            orderbtns = {
-                1: document.getElementById('btn-order1'),
-                2: document.getElementById('btn-order2'),
-                3: document.getElementById('btn-order3'),
-                4: document.getElementById('btn-order4')
-            }
-
-            Object.values(orderbtns).forEach(btn => {
-                if(btn) btn.classList.remove('active');
-            });
-            
-            for(let i=1;i<=4;i++) {
-                if(i == ordertype) {
-                    const btn = orderbtns[i];
-                    if(btn) btn.classList.add('active');
-                }
-            }
 
             if(ordertype == 1)
             {
@@ -1454,6 +1416,10 @@ function setordertype(type)
 
 let ratingordertoggleState = false;
 
+const sortModeMessages = ['', 'Sort: Recent', 'Sort: Name', 'Sort: Daily Shuffle', 'Sort: Random'];
+
+let initialToastShown = false;
+
 function setRatingOrderToggle()
 {
 	ratingordertoggleState = !ratingordertoggleState;
@@ -1515,14 +1481,6 @@ function Reload_View() {
 
 document.addEventListener('keydown', (e) => {
     
-    // Shift 키로 sidebar 토글
-    if (e.key === 'Shift') {
-        const sidebar = document.getElementById('sidebar');
-        if (sidebar) {
-            sidebar.classList.toggle('visible');
-        }
-    }
-
     // console.log(e.key);
 
     if(typingmode || typingmodecmd)
@@ -1621,12 +1579,28 @@ document.addEventListener('keydown', (e) => {
     else if(e.key == '\\')
     {
         console.log('[Cache] Force refresh: Clearing cache and reloading');
-				
+				showActionToast('Force Refresh');
 				Reload_View();
+    }
+    else if(!typingmode && !typingmodecmd && e.key == 'b')
+    {
+        showActionToast('Open Bookmarks');
+        openBookmarks();
+    }
+    else if(!typingmode && !typingmodecmd && e.key >= '1' && e.key <= '4')
+    {
+        showActionToast(sortModeMessages[Number(e.key)]);
+        setordertype(Number(e.key));
+    }
+    else if(!typingmode && !typingmodecmd && e.key == '0')
+    {
+        setRatingOrderToggle();
+        showActionToast(`Rating Order: ${ratingordertoggleState ? 'ON' : 'OFF'}`);
     }
     else if(e.key == 's' && !typingmode && !typingmodecmd)
     {
         toggleSingleFrameMode();
+        showActionToast(`Single Frame: ${singleFrameMode ? 'ON' : 'OFF'}`);
     }
     else if(e.key == 'Backspace')
     {

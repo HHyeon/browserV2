@@ -129,63 +129,6 @@
         height: 100vh;
         }
 
-        .sidebar {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 155, 255, 0.9);
-        color: white;
-        padding: 20px;
-        border-radius: 16px;
-        z-index: 1000;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.25s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        }
-        
-        .sidebar.visible {
-        opacity: 1;
-        pointer-events: auto;
-        }
-        
-        .sidebar-buttons {
-        display: flex;
-        flex-direction: row;
-        gap: 16px;
-        }
-        
-        .sidebar-buttons button {
-        width: 60pt;
-        height: 60pt;
-        border: none;
-        border-radius: 12px;
-        background: #334155;
-        color: white;
-        font-size: 24pt;
-        cursor: pointer;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.2s, transform 0.15s;
-        }
-        
-        .sidebar-buttons button:hover {
-        background: rgba(0, 155, 255, 0.5);
-        transform: scale(1.08);
-        }
-
-        .sidebar-buttons button.active {
-        background: rgba(255, 155, 0, 0.8);
-        box-shadow: 0 0 10px rgba(255, 155, 0, 0.5);
-        }
-
-        .sidebar-trigger {
-        display: none;
-        }
-
     </style>
 
 </head>
@@ -195,25 +138,13 @@
         <h1 id="typing_panel" style="text-align: center"></h1>
     </div>
 
+    <div id="action-toast" style="position: fixed; top: 10px; left: 10px; z-index: 2000; background-color: rgba(0, 0, 0, 0.6); color: white; padding: 6px 12px; font-size: 16px; border-radius: 6px; opacity: 0; transition: opacity 0.2s ease; pointer-events: none;"></div>
+
     <canvas hidden></canvas>
     
     <h1 id="MainTitle" style="position: absolute; transform: translate(100px,100px); display: none;">HelloThere</h1>
 
     <div class="layout">
-
-        <aside class="sidebar" id="sidebar">
-            
-        <div class="sidebar-buttons">
-            <button id="btn-open-explorer">📁</button>
-            <button id="btn-open-bookmarks">🔖</button>
-            <button id="btn-order1" onclick="setordertype(1)">🕒</button>
-            <button id="btn-order2" onclick="setordertype(2)">🔤</button>
-            <button id="btn-order3" onclick="setordertype(3)">📅</button>
-            <button id="btn-order4" onclick="setordertype(4)">♻️</button>
-            <button id="btn-rating-toggle" onclick="setRatingOrderToggle()">⭐</button>
-        </div>
-        
-        </aside>
 
         <div id="scroll-views"></div>
 

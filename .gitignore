@@ -1,4 +1,3 @@
 node_modules/
 drvs/
-ratings.json
-bookmarks.json
+*.json
