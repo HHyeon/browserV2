@@ -870,6 +870,42 @@ function randChoice(arr) {
     return arr[Math.floor(Math.random() * arr.length)]
 }
 
+// 🔑 VR 파일 감지: 2:1 비율(equirectangular)이 우선, 프로브 실패 시 파일명 휴리스틱 폴백
+let vid180Cache = {};
+
+function isVRByFilename(fname) {
+    const name = fname.toLowerCase();
+    if (name.includes('vr')) return true;
+    if (name.includes('180')) return true; // VR180
+    if (name.includes('panorama') || name.includes('pano')) return true;
+    if (name.endsWith('.360') || name.endsWith('.insv') || name.endsWith('.insp') || name.endsWith('.thumb')) return true;
+    if (/(^|[^a-z0-9])360([^a-z0-9]|$)/.test(name)) return true; // "360p" 같은 해상도 표기 제외
+    return false;
+}
+
+async function isVRVideo(vidpath, fname) {
+    if (vid180Cache[vidpath] !== undefined) return vid180Cache[vidpath];
+
+    try {
+        // 🔑 vidpath는 이미 인코딩된 경로 (dirseek.php와 동일 패턴)
+        const res = await fetch(`vrprobe.php?x[]=${vidpath}`, { cache: 'no-store' });
+        if (res.ok) {
+            const arr = await res.json();
+            const r = Array.isArray(arr) ? arr[0] : null;
+            if (r && typeof r.isVR === 'boolean') {
+                vid180Cache[vidpath] = r.isVR;
+                return r.isVR;
+            }
+        }
+    }
+    catch (e) {
+        console.error('vrprobe failed', e);
+    }
+
+    vid180Cache[vidpath] = isVRByFilename(fname);
+    return vid180Cache[vidpath];
+}
+
 let makeitem_Store = {};
 
 async function makeitem(w,h,x,y,fname,text,force=false) {
@@ -914,7 +950,8 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
                         imageCount++;
                     }
                     if(fnameext == 'mp4' || fnameext == 'mov' || fnameext == 'mkv') hasMp4 = true;
-                    if(name.toUpperCase().includes('VR')) hasVR = true;
+                    // 🔑 VR 배지: 파일명으로만 판정 (vr, VR, 180, 360 등)
+                    if(isVRByFilename(name)) hasVR = true;
                 })
         
                 let totalFiles = jsondata["data"].length;
@@ -1018,9 +1055,17 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     {
         item_enterable = true;
 
+        // 🔑 VR 여부: makeitem_Store 캐시 → 프로브(2:1 비율) → 파일명 폴백
+        let isVR = makeitem_Store[fname]?.item_vid180;
+        if(typeof isVR !== 'boolean')
+        {
+            isVR = await isVRVideo(vidpath, fname);
+            if(makeitem_Store[fname]) makeitem_Store[fname].item_vid180 = isVR;
+        }
+
         linkelemnts = ``;
         
-        if(fname.includes('vr') || fname.includes('VR'))
+        if(isVR)
         {
             linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
         }
@@ -1249,6 +1294,7 @@ async function startup() {
     dirlist = [];
     clearAllThumbnailIntervals();
     makeitem_Store = {};
+    vid180Cache = {};
 
     const jsondata = await dirseek(parampath);
     if(jsondata["ret"])
@@ -1472,6 +1518,7 @@ function Reload_View() {
 	// 캐시 초기화: makeitem_Store를 비워서 모든 항목이 다시 로드되도록 함
 	clearAllThumbnailIntervals();
 	makeitem_Store = {};
+	vid180Cache = {};
 	// 비디오 로드 큐도 초기화 (진행 중인 작업은 계속 진행되지만, 큐는 새로 시작)
 	videoLoadQueue = [];
 	// 강제 새로고침: 모든 아이템을 다시 렌더링하고 비디오 프레임을 새로 추출
