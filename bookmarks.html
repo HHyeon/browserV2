@@ -83,6 +83,34 @@
             color: rgba(255, 255, 255, 0.8);
             margin-left: 8px;
         }
+
+        #tabs {
+            position: fixed;
+            top: 48px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 4px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: flex;
+            gap: 4px;
+        }
+
+        #tabs .tab {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #tabs .tab.active {
+            background-color: rgba(100, 180, 255, 0.25);
+            color: rgba(255, 255, 255, 0.95);
+        }
     </style>
 
 </head>
@@ -94,6 +122,12 @@
         <a href="index.html">index</a>
         <span class="bm-count" id="bm-count"></span>
         <span class="bm-count" id="bm-path"></span>
+    </div>
+
+    <div id="tabs">
+        <button class="tab active" data-tab="all" onclick="switchTab('all')">All</button>
+        <button class="tab" data-tab="normal" onclick="switchTab('normal')">Normal</button>
+        <button class="tab" data-tab="vr" onclick="switchTab('vr')">VR</button>
     </div>
 
     <div class="layout">
@@ -181,33 +215,76 @@
             }).join('/');
         }
 
+        // 🔑 전체 북마크 (일반 + VR) — mode 별 분리 저장 파일을 함께 읽음
+        let allBookmarks = [];
+        let currentTab = 'all'; // 'all' | 'normal' | 'vr'
+
+        function applyTabFilter() {
+            dirlist = allBookmarks.filter(b => currentTab === 'all' || (currentTab === 'vr') === b.vr);
+        }
+
         async function loadBookmarkData() {
+            allBookmarks = [];
             try {
-                const res = await fetch('bookmark.php?all=1', { cache: 'no-store' });
-                const json = await res.json();
-                dirlist = [];
-                if (json.ret && json.data) {
+                const sources = [
+                    { mode: '', vr: false },
+                    { mode: 'vr', vr: true }
+                ];
+                for (const src of sources) {
+                    const res = await fetch(`bookmark.php?all=1${src.mode ? '&mode=' + src.mode : ''}`, { cache: 'no-store' });
+                    const json = await res.json();
+                    if (!(json.ret && json.data)) continue;
                     for (const path of Object.keys(json.data)) {
                         if (filterPath) {
                             const dir = path.substring(0, path.lastIndexOf('/'));
                             if (dir.replace(/\/+$/, '') !== filterPath) continue;
                         }
                         for (const bm of json.data[path]) {
-                            dirlist.push({ path: path, name: bm.name, time: bm.time, id: bm.id });
+                            allBookmarks.push({ path: path, name: bm.name, time: bm.time, id: bm.id, vr: src.vr });
                         }
                     }
                 }
             } catch (e) {
                 console.error('loadBookmarkData error', e);
-                dirlist = [];
             }
+            applyTabFilter();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('#tabs .tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tab);
+            });
+            applyTabFilter();
+            renderBookmarkGrid();
+        }
+
+        function renderBookmarkGrid() {
+            const countEl = document.getElementById('bm-count');
+            if (countEl) countEl.textContent = `${dirlist.length} bookmarks`;
+
+            if (dirlist.length == 0) {
+                MainTitle.style.display = 'block';
+                MainTitle.innerText = 'no bookmarks';
+                TopScrollView.style.height = '0px';
+                return;
+            }
+            MainTitle.style.display = 'none';
+
+            TopScrollView.style.height = (Math.floor(dirlist.length / visual_pictures_row)) * item_h;
+
+            scrolleditemidx = 0;
+            scrolleditemidx_store = 0;
+            window.scrollTo(0, 0);
+            refreshinginfinitylist(true);
         }
 
         function makeitem(w, h, x, y, item) {
             const fname = item.path.substring(item.path.lastIndexOf('/') + 1);
             const timeText = `${item.name} (${item.time.toFixed(1)}s)`;
+            const viewer = item.vr ? 'videoview180.html' : 'videoview.html';
             return `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; user-select: none; -webkit-user-select: none; box-sizing: border-box; overflow: hidden; pointer-events: auto;">
-                <a href="videoview.html?p=${encodePath(item.path)}&t=${item.time}" target="_blank"></a>
+                <a href="${viewer}?p=${encodePath(item.path)}&t=${item.time}" target="_blank"></a>
                 <img data-path="${encodePath(item.path)}" data-time="${item.time}" src="" alt="" style="position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false">
                 <div class="layer-text">
                     <h3>${fname}<br><span style="font-size: 14px; color: rgba(100,180,255,0.9);">${timeText}</span></h3>
@@ -365,16 +442,8 @@
         async function startup() {
             await loadBookmarkData();
 
-            const countEl = document.getElementById('bm-count');
-            if (countEl) countEl.textContent = `${dirlist.length} bookmarks`;
             const pathEl = document.getElementById('bm-path');
             if (pathEl) pathEl.textContent = filterPath ? ` | ${filterPath}` : '';
-
-            if (dirlist.length == 0) {
-                MainTitle.style.display = 'block';
-                MainTitle.innerText = 'no bookmarks';
-                return;
-            }
 
             visual_pictures_row = Math.round(window.innerWidth / visual_pictures_row_item_px);
             if (visual_pictures_row == 0) visual_pictures_row = 1;
@@ -384,9 +453,7 @@
             item_h = item_w / 4 * 3;
             visual_pictures_col = Math.floor(window.innerHeight / item_h) + 2;
 
-            TopScrollView.style.height = (Math.floor(dirlist.length / visual_pictures_row)) * item_h;
-
-            refreshinginfinitylist(true);
+            renderBookmarkGrid();
         }
 
         startup();

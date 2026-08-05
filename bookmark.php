@@ -1,15 +1,28 @@
 <?php
 
-$file = __DIR__ . '/bookmarks.json';
+// 🔑 뷰어별 북마크 파일 분리 — mode 파라미터로 파일 선택 (기본: bookmarks.json, vr: bookmarks_vr.json)
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $mode = $_GET['mode'] ?? '';
+} else {
+    $raw = file_get_contents('php://input');
+    $input = json_decode($raw, true);
+    $mode = (is_array($input) && isset($input['mode'])) ? $input['mode'] : '';
+}
+if ($mode !== 'vr') $mode = '';
+
+function bookmark_file() {
+    global $mode;
+    return $mode === 'vr' ? __DIR__ . '/bookmarks_vr.json' : __DIR__ . '/bookmarks.json';
+}
 
 function load() {
-    global $file;
+    $file = bookmark_file();
     if (!file_exists($file)) return [];
     return json_decode(file_get_contents($file), true) ?: [];
 }
 
 function save($data) {
-    global $file;
+    $file = bookmark_file();
 
     $dir = dirname($file);
     if (!is_dir($dir)) {
@@ -45,7 +58,6 @@ else if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['path'])) {
     echo json_encode(['ret' => true, 'bookmarks' => $data[$path] ?? []]);
 }
 else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) {
         echo json_encode(['ret' => false, 'error' => 'invalid json']);
         exit;

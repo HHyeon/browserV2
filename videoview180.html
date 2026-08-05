@@ -1139,7 +1139,7 @@
 
             async function bookmarkFetch(path) {
                 try {
-                    const res = await fetch(`bookmark.php?path=${encodeURIComponent(path)}`, { cache: 'no-store' });
+                    const res = await fetch(`bookmark.php?mode=vr&path=${encodeURIComponent(path)}`, { cache: 'no-store' });
                     const json = await res.json();
                     return json.ret ? json.bookmarks : [];
                 } catch (e) {
@@ -1153,7 +1153,7 @@
                     const res = await fetch('bookmark.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'add', path: path, time: time, name: name })
+                        body: JSON.stringify({ action: 'add', path: path, time: time, name: name, mode: 'vr' })
                     });
                     const json = await res.json();
                     if (json.ret) bookmarks = json.bookmarks;
@@ -1170,7 +1170,7 @@
                     const res = await fetch('bookmark.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'remove', path: path, id: id })
+                        body: JSON.stringify({ action: 'remove', path: path, id: id, mode: 'vr' })
                     });
                     const json = await res.json();
                     if (json.ret) bookmarks = json.bookmarks;
