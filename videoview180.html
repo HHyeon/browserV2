@@ -127,16 +127,16 @@
                 padding: 8px;
                 z-index: 1000;
                 box-sizing: border-box;
-                opacity: 0;
-                visibility: hidden;
+                opacity: 1;
+                visibility: visible;
                 transition: opacity 0.3s ease, visibility 0.3s ease;
                 text-align: left;
                 font-size: 14px;
             }
 
-            #bookmark-panel.visible {
-                opacity: 1;
-                visibility: visible;
+            #bookmark-panel.hidden {
+                opacity: 0;
+                visibility: hidden;
             }
 
             .bookmark-row {
@@ -151,6 +151,11 @@
 
             .bookmark-row:hover {
                 background-color: rgba(255, 255, 255, 0.1);
+            }
+
+            .bookmark-row.active {
+                background-color: rgba(100, 180, 255, 0.25);
+                outline: 1px solid rgba(100, 180, 255, 0.7);
             }
 
             .bookmark-row .bookmark-time {
@@ -301,6 +306,7 @@
 
             player.addEventListener("timeupdate", (event) => {
                 updateProgressPanel();
+                updateActiveBookmark();
             });
             
             const label1 = document.getElementById("label1");
@@ -793,7 +799,7 @@
                         }
                         break;
 
-                    case 'b':
+                    case ';':
                         {
                             if(!player.duration || !currentVideoPath) break;
                             const t = player.currentTime;
@@ -802,11 +808,7 @@
                         }
                         break;
 
-                    case 'B':
-                        toggleBookmarkPanel();
-                        break;
-
-                    case 'n':
+                    case '\'':
                         {
                             if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
                             const ct = player.currentTime;
@@ -816,7 +818,7 @@
                         }
                         break;
 
-                    case 'p':
+                    case 'l':
                         {
                             if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
                             const ct = player.currentTime;
@@ -1134,7 +1136,7 @@
             // 🔑 북마크 기능
             let bookmarks = [];
             let currentVideoPath = '';
-            let bookmarkPanelVisible = false;
+            let bookmarkPanelVisible = true;
             const bookmarkPanel = document.getElementById('bookmark-panel');
 
             async function bookmarkFetch(path) {
@@ -1225,6 +1227,7 @@
                     const row = document.createElement('div');
                     row.className = 'bookmark-row';
                     row.title = `${bm.name} @ ${bm.time}s`;
+                    row.dataset.id = bm.id;
 
                     const timeEl = document.createElement('span');
                     timeEl.className = 'bookmark-time';
@@ -1251,11 +1254,30 @@
 
                     bookmarkPanel.appendChild(row);
                 });
+
+                updateActiveBookmark();
             }
 
             function toggleBookmarkPanel(force) {
                 bookmarkPanelVisible = (force !== undefined) ? force : !bookmarkPanelVisible;
-                bookmarkPanel.classList.toggle('visible', bookmarkPanelVisible);
+                bookmarkPanel.classList.toggle('hidden', !bookmarkPanelVisible);
+            }
+
+            function updateActiveBookmark() {
+                if(!bookmarks.length || !player.duration) return;
+                const ct = player.currentTime;
+                let nearest = bookmarks[0];
+                let nearestDist = Math.abs(bookmarks[0].time - ct);
+                for(let i = 1; i < bookmarks.length; i++) {
+                    const dist = Math.abs(bookmarks[i].time - ct);
+                    if(dist < nearestDist) {
+                        nearestDist = dist;
+                        nearest = bookmarks[i];
+                    }
+                }
+                bookmarkPanel.querySelectorAll('.bookmark-row').forEach(row => {
+                    row.classList.toggle('active', row.dataset.id === String(nearest.id));
+                });
             }
 
             progressLink.addEventListener('contextmenu', (e) => {
