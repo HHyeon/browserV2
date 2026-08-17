@@ -483,6 +483,12 @@ const ThumbnailIntervalManager = {
         if (!isPageFocused || document.hidden) return;
         if (!imgElement.isConnected) return;
 
+        // 🔑 싱글 프레임 모드: 이미 로드된 썸네일은 재로드하지 않음 (첫 decode만 사용)
+        const itemData = makeitem_Store[fname];
+        if (singleFrameMode && itemData && itemData.item_img && !itemData.need_video_load) {
+            return;
+        }
+
         this.activeItems.set(fname, true);
         this.tick(fname, imgElement);
     },
@@ -757,6 +763,10 @@ async function processVideoLoadQueue() {
                 imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
                 imgElement.alt = 'Video thumbnail';
                 imgElement.dataset.fname = videoInfo.fname;
+                // 🔑 VR 영상: SBS 프레임 좌반만 표시
+                if(makeitem_Store[videoInfo.fname]?.item_vid180 === true) {
+                    imgElement.classList.add('vr-half');
+                }
 
                 const currentSeekTime = Math.random() * (videoElement.duration || videoDurationifFail);
                 const videoDuration = videoElement.duration || videoDurationifFail;
@@ -1157,8 +1167,10 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     const imgDragAttrs = 'draggable="false" style="pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;"';
     
     imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover;" ${imgAttrs}>`;
+    const isVRItem = item_vid && makeitem_Store[fname]?.item_vid180 === true;
+    const vrHalfClass = isVRItem ? 'vr-half' : '';
     if (item_vid) {
-        imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
+        imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" class="${vrHalfClass}" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
     } else {
         imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
     }
