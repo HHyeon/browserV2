@@ -725,16 +725,16 @@
                     break;
 
                     case '.':
-                        if(player.style.objectFit == 'contain')
-                        {
-                            setLabelText("Fit To Window");
-                            player.style.objectFit='cover';
-                        }
-                        else
-                        {
-                            setLabelText("Fit To Video");
-                            player.style.objectFit='contain';
-                        }
+                        // if(player.style.objectFit == 'contain')
+                        // {
+                        //     setLabelText("Fit To Window");
+                        //     player.style.objectFit='cover';
+                        // }
+                        // else
+                        // {
+                        //     setLabelText("Fit To Video");
+                        //     player.style.objectFit='contain';
+                        // }
                             
                         break;
                     case ' ':
@@ -800,6 +800,7 @@
                         break;
 
                     case ';':
+                    case 'x':
                         {
                             if(!player.duration || !currentVideoPath) break;
                             const t = player.currentTime;
@@ -809,6 +810,7 @@
                         break;
 
                     case '\'':
+                    case 'c':
                         {
                             if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
                             const ct = player.currentTime;
@@ -819,6 +821,7 @@
                         break;
 
                     case 'l':
+                    case 'z':
                         {
                             if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
                             const ct = player.currentTime;
