@@ -17,6 +17,8 @@ const CONTROL_PANEL_HIDE_DELAY = 1000; // 3 seconds
 
 let isXrLoopActive = false;
 let is2DMode = false;
+let isStereoMode = false;
+let renderEyeIndex = 0;
 let vrControlPanel;
 
 // 2D Camera Controls
@@ -420,9 +422,9 @@ function init() {
 			if (!material.map) return;
 			const isPresentingXR = renderer.xr.isPresenting;
 			
-			// Handle 2D mode - show only left eye view
+			// Handle 2D mode - show left eye, or stereo left/right eye
 			if (is2DMode && !isPresentingXR) {
-				material.map.offset.x = 0;
+				material.map.offset.x = (isStereoMode && renderEyeIndex === 1) ? 0.5 : 0;
 				material.map.repeat.x = 0.5;
 				material.map.offset.y = 0;
 				material.map.repeat.y = 1;
@@ -893,7 +895,7 @@ function onWindowResize()
 				const canvasHeight = Math.max(calculatedHeight, 180);
 				
 				renderer.setSize(canvasWidth, canvasHeight);
-				camera2D.aspect = canvasWidth / canvasHeight;
+				camera2D.aspect = isStereoMode ? (canvasWidth / 2) / canvasHeight : canvasWidth / canvasHeight;
 				camera2D.updateProjectionMatrix();
 				
 				// Update canvas styling to maintain proper positioning
@@ -1085,7 +1087,35 @@ function render2D() {
 	updateCameraRotation();
 	
 	if (renderer && camera2D && scene) {
-		renderer.render(scene, camera2D);
+		if (isStereoMode) {
+			const fullAspect = window.innerWidth / window.innerHeight;
+			const halfW = Math.floor(window.innerWidth / 2);
+			const fullH = window.innerHeight;
+
+			renderer.setScissorTest(true);
+
+			// Left eye
+			renderEyeIndex = 0;
+			camera2D.aspect = fullAspect / 2;
+			camera2D.updateProjectionMatrix();
+			renderer.setViewport(0, 0, halfW, fullH);
+			renderer.setScissor(0, 0, halfW, fullH);
+			renderer.render(scene, camera2D);
+
+			// Right eye
+			renderEyeIndex = 1;
+			renderer.setViewport(halfW, 0, halfW, fullH);
+			renderer.setScissor(halfW, 0, halfW, fullH);
+			renderer.render(scene, camera2D);
+
+			renderer.setScissorTest(false);
+			renderEyeIndex = 0;
+		} else {
+			const fullAspect = window.innerWidth / window.innerHeight;
+			camera2D.aspect = fullAspect;
+			camera2D.updateProjectionMatrix();
+			renderer.render(scene, camera2D);
+		}
 	}
 	
 	requestAnimationFrame(render2D);
@@ -1380,6 +1410,9 @@ function togglePlayPause() {
 }
 
 function resetToOriginalState() {
+	// Reset stereo mode
+	isStereoMode = false;
+
 	// Reset video to show poster frame
 	if (video) {
 		video.pause();
@@ -1871,3 +1904,19 @@ function renderXR(timestamp, frame) {
 		}
 	}
 }
+
+window.toggleStereoMode = function() {
+	if (renderer.xr && renderer.xr.isPresenting) return false;
+	if (!is2DMode) return false;
+
+	isStereoMode = !isStereoMode;
+
+	// Let onWindowResize reconfigure camera aspect from container dimensions
+	onWindowResize();
+
+	return isStereoMode;
+};
+
+Object.defineProperty(window, 'isStereoMode', {
+	get: function() { return isStereoMode; }
+});

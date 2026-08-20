@@ -243,7 +243,7 @@
                     <span id="progress-separator"> / </span>
                     <span id="progress-total">00:00</span>
                 </div>
-                <a id="progress-link" href="#" target="_blank">Link</a>
+                <a id="progress-link" href="#" target="_blank" rel="noopener noreferrer">Link</a>
             </div>
             <div id="progress-bar-container">
                 <div id="progress-bar"></div>
@@ -254,7 +254,18 @@
 
         <script>
 
-            player = document.getElementById("vr180");
+            const player = document.getElementById("vr180");
+
+            function getPlayerCanvas() {
+                return document.querySelector('canvas');
+            }
+
+            function playVideo() {
+                const playPromise = player.play();
+                if(playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch((error) => console.warn('video play failed', error));
+                }
+            }
             
 
             function setCookie(cname, cvalue, exhours) {
@@ -367,7 +378,7 @@
             function pauseplay() {
                 if(player_paused_state) {
                     player_paused_state = false;
-                    player.play();
+                    playVideo();
                     setLabelText("play");
                 }
                 else {
@@ -494,10 +505,11 @@
                     return;
                 }
         
-                if(document.querySelectorAll('canvas')[0].style.visibility == '')
+                const canvas = getPlayerCanvas();
+                if(canvas && canvas.style.visibility == '')
                 {
                     player_paused_state = false;
-                    player.play();
+                    playVideo();
                     setLabelText("play");
                 }
                 else
@@ -515,9 +527,10 @@
                     return;
                 }
 
-                if(document.querySelectorAll('canvas') == undefined || document.querySelectorAll('canvas').length == 0) return;
+                const canvas = getPlayerCanvas();
+                if(!canvas) return;
                 
-                if(document.querySelectorAll('canvas')[0].style.visibility == '')
+                if(canvas.style.visibility == '')
                 {
                     player_paused_state = true;
                     player.pause();
@@ -536,6 +549,11 @@
             {
                 console.log(param.key);
 
+                const handledKeys = ['/', 'Backspace', '\\', ']', 'PageDown', '[', 'PageUp',
+                    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ' ', 'Enter', 'f',
+                    'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z', 's'];
+                if(handledKeys.includes(param.key)) param.preventDefault();
+
                 switch(param.key){
 
                     case '/':
@@ -548,13 +566,14 @@
 
                     case 'Backspace':
                         
-                        if(document.querySelectorAll('canvas')[0].style.visibility == '')
+                        const canvas = getPlayerCanvas();
+                        if(canvas && canvas.style.visibility == '')
                         {                            
                             player_paused_state = true;
                             player.pause();
                             setLabelText("pause");
 
-                            document.querySelectorAll('canvas')[0].style.visibility='hidden';
+                            canvas.style.visibility='hidden';
                             
                             if (document.exitFullscreen)
                                 document.exitFullscreen();
@@ -562,10 +581,10 @@
                         else
                         {
                             player_paused_state = false;
-                            player.play();
+                            playVideo();
                             setLabelText("play");
                             
-                            document.querySelectorAll('canvas')[0].style.visibility='';
+                            if(canvas) canvas.style.visibility='';
                         }
                     break;
                     
@@ -582,6 +601,13 @@
                             player.volume = mutevolumestore;
                             
                             setLabelText(`volumn: ${parseInt(player.volume*100)}%`);
+                        }
+                    break;
+
+                    case 's':
+                        if (typeof window.toggleStereoMode === 'function') {
+                            window.toggleStereoMode();
+                            setLabelText(window.isStereoMode ? "stereo: on" : "stereo: off");
                         }
                     break;
 
@@ -623,7 +649,7 @@
 
                                 const nextvidpath = currentdir + '/' + currentfilename;
                                 player.src = nextvidpath; 
-                                player.play();
+                                playVideo();
 
                                 await loadBookmarksFor(nextvidpath);
 
@@ -666,7 +692,7 @@
                                 currentfilename = dirlist[currentfileidx]['d'];
 
                                 player.src = nextvidpath; 
-                                player.play();
+                                playVideo();
                                 loadBookmarksFor(nextvidpath);
                                 console.log(`next video - ${nextvidpath}`);
 
@@ -689,7 +715,7 @@
                                 currentfilename = dirlist[currentfileidx]['d'];
 
                                 player.src = nextvidpath; 
-                                player.play();
+                                playVideo();
                                 loadBookmarksFor(nextvidpath);
                                 console.log(`prev video - ${nextvidpath}`);
 
@@ -1048,8 +1074,8 @@
             // const min_seeking_unit = 0.1;
             const scroll_range = 1000;
 
-            // let speed_currentpushstarts=-1;
-            // let speed_currentpush;
+            let speed_currentpushstarts = 1;
+            let speed_currentpush = 0;
 
             document.addEventListener("mousemove", (param) => {
 
@@ -1121,7 +1147,7 @@
 
                 }
                 else {
-                    if(!window.getIsDragging()) showProgressPanel();
+                    if(!(window.getIsDragging && window.getIsDragging())) showProgressPanel();
                 }
 
             });
@@ -1161,8 +1187,10 @@
                         body: JSON.stringify({ action: 'add', path: path, time: time, name: name, mode: 'vr' })
                     });
                     const json = await res.json();
-                    if (json.ret) bookmarks = json.bookmarks;
-                    renderBookmarkPanel();
+                    if (json.ret && currentVideoPath === path) {
+                        bookmarks = json.bookmarks;
+                        renderBookmarkPanel();
+                    }
                     return json.ret;
                 } catch (e) {
                     console.error('bookmarkAdd error', e);
@@ -1178,8 +1206,10 @@
                         body: JSON.stringify({ action: 'remove', path: path, id: id, mode: 'vr' })
                     });
                     const json = await res.json();
-                    if (json.ret) bookmarks = json.bookmarks;
-                    renderBookmarkPanel();
+                    if (json.ret && currentVideoPath === path) {
+                        bookmarks = json.bookmarks;
+                        renderBookmarkPanel();
+                    }
                     return json.ret;
                 } catch (e) {
                     console.error('bookmarkRemove error', e);
@@ -1189,7 +1219,9 @@
 
             async function loadBookmarksFor(path) {
                 currentVideoPath = path;
-                bookmarks = await bookmarkFetch(path);
+                const loadedBookmarks = await bookmarkFetch(path);
+                if(currentVideoPath !== path) return;
+                bookmarks = loadedBookmarks;
                 renderBookmarkPanel();
             }
 
@@ -1465,11 +1497,16 @@
 
                         // keep only mp4s
                         while(true) {  
-                            const find__ = dirlist.find((a) => { return a["d"].substr(a["d"].lastIndexOf('.')) != ".mp4" });
+                            const find__ = dirlist.find((a) => { return !a["d"].toLowerCase().endsWith(".mp4") });
                             if(find__ == undefined) break;
                             const idx = dirlist.lastIndexOf(find__);
                             dirlist.splice(idx, 1);
                         }
+                    }
+                    else
+                    {
+                        console.error('failed to load directory list', currentdir);
+                        dirlist = [];
                     }
                     
                     for(let i=0;i<dirlist.length;i++)
