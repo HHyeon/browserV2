@@ -14,6 +14,16 @@ fetch('ffmpeg_config.json', { cache: 'no-store' })
     })
     .catch(() => {});
 
+// 🔑 WebXR 지원 여부 캐시 (네이티브 VR 런처 활성화용)
+let webxrSupported = false;
+if (navigator.xr) {
+    navigator.xr.isSessionSupported('immersive-vr').then(s => { webxrSupported = s; }).catch(() => {});
+}
+
+function getVRViewerPath() {
+    return webxrSupported ? 'videoview180-vr.html' : 'videoview180.html';
+}
+
 
 
 const urlParams = (new URL(window.location.href)).searchParams;
@@ -1077,7 +1087,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         
         if(isVR)
         {
-            linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview180.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
+            linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/${getVRViewerPath()}?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
         }
         else
         {
@@ -1118,7 +1128,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         if (hasVR) {
             playvidBadge += `<div class="badge">
                 playvid180 
-                <a href="${document.location.origin}${document.location.pathname}/videoview180.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+                <a href="${document.location.origin}${document.location.pathname}/${getVRViewerPath()}?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
             </div>`;
         }
         let imageviewBadge = '';

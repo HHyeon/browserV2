@@ -5,7 +5,7 @@ let vr180Mesh;
 let xrSession = null;
 let controller1, raycaster, uiElements = [];
 const tempMatrix = new THREE.Matrix4();
-let videoElement, playBtn;
+let videoElement;
 let frameCounter = 0;
 
 // 2D Control Panel Elements
@@ -115,20 +115,6 @@ const SOUND_MUTED_SVG_PATH = "M6.9082 2.8985C7.71639 2.45747 8.74994 3.03437 8.7
 
 
 // Dynamic UI Creation Functions
-function createPlayButton() {
-	const playButton = document.createElement('button');
-	playButton.id = 'playBtn';
-	playButton.setAttribute('aria-label', 'Play video');
-	
-	const playImg = document.createElement('img');
-	playImg.src = 'vr180player/images/play.png';
-	playImg.alt = 'Play';
-	
-	playButton.appendChild(playImg);
-	
-	return playButton;
-}
-
 function create2DControlPanel() {
 	const panel = document.createElement('div');
 	panel.id = 'panel';
@@ -218,48 +204,15 @@ document.addEventListener('DOMContentLoaded', () => {
 		return;
 	}
 
-	// Create and insert play button
-	playBtn = createPlayButton();
-	container.appendChild(playBtn);
-
 	// Create and insert 2D control panel
 	const controlPanel = create2DControlPanel();
 	container.appendChild(controlPanel);
 
-	playBtn.disabled = true;
-	
 	if (videoElement) {
 		videoElement.load();
 	}
 
-	if (navigator.xr) {
-		navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-			if (supported) {
-				playBtn.dataset.xrSupported = "true";
-			} else {
-				playBtn.dataset.xrSupported = "false";
-				// Enable button for regular video playback when VR is not supported
-				playBtn.disabled = false;
-			}
-			// Always call init() regardless of VR support
-			init();
-		}).catch(err => {
-			console.error("XR Support Check Error:", err);
-			playBtn.dataset.xrSupported = "false";
-			// Enable button for regular video playback when VR check fails
-			playBtn.disabled = false;
-			// Call init() even when VR check fails
-			init();
-		});
-	} else {
-		playBtn.dataset.xrSupported = "false";
-		// If navigator.xr itself is not available, enable button for regular video playback
-		if (playBtn) {
-			playBtn.disabled = false;
-		}
-		// Call init() even when XR is not available
-		init();
-	}
+	init();
 });
 
 function drawRoundedRect(ctx, x, y, width, height, radius, fill, stroke) {
@@ -670,17 +623,10 @@ function init() {
 	}
 
 	try { // Phase 3: Event Listeners
-		if (playBtn) {
-			playBtn.addEventListener('click', handleEnterVRButtonClick);
-		}
 		window.addEventListener('resize', onWindowResize);
 
 		if (video) {
 		video.onloadedmetadata = () => {
-			if (isFinite(video.duration) && playBtn) {
-				// Enable button for both VR and non-VR scenarios when video is ready
-				playBtn.disabled = false;
-			}
 			updateSeekBarAppearance();
 			updateCanvasAspectRatio();
 			updateVRPlayPauseButtonIcon();
@@ -689,10 +635,6 @@ function init() {
 			update2DMuteButton();
 		};
 			video.oncanplaythrough = () => {
-				if (playBtn && video.readyState >= video.HAVE_FUTURE_DATA) {
-					// Enable button for both VR and non-VR scenarios when video is ready to play
-					playBtn.disabled = false;
-				}
 			};
 			video.ontimeupdate = () => {
 				if (isFinite(video.duration)) {
@@ -712,7 +654,6 @@ function init() {
 				const videoError = video.error;
 				const errorDetail = videoError ? `Code: ${videoError.code}, Message: ${videoError.message}` : 'Unknown error';
 				console.error("VIDEO_ERROR_EVENT:", e, "Details:", errorDetail);
-				if (playBtn) playBtn.disabled = true;
 			};
 			video.addEventListener('ended', onVideoEnded);
 			video.addEventListener('volumechange', updateVRVolumeButtonIcon);
@@ -722,7 +663,7 @@ function init() {
 		// Initialize 2D control panel
 		// init2DControlPanel();
 
-		handleEnterVRButtonClick();
+		start2DMode();
 	} catch (e) {
 		console.error("INIT_ERROR (Phase 3 - Event Listeners):", e);
 	}
@@ -1088,15 +1029,15 @@ function render2D() {
 	
 	if (renderer && camera2D && scene) {
 		if (isStereoMode) {
-			const fullAspect = window.innerWidth / window.innerHeight;
-			const halfW = Math.floor(window.innerWidth / 2);
-			const fullH = window.innerHeight;
+			const fullW = renderer.domElement.width;
+			const fullH = renderer.domElement.height;
+			const halfW = Math.floor(fullW / 2);
 
 			renderer.setScissorTest(true);
 
 			// Left eye
 			renderEyeIndex = 0;
-			camera2D.aspect = fullAspect / 2;
+			camera2D.aspect = (fullW / 2) / fullH;
 			camera2D.updateProjectionMatrix();
 			renderer.setViewport(0, 0, halfW, fullH);
 			renderer.setScissor(0, 0, halfW, fullH);
@@ -1111,8 +1052,9 @@ function render2D() {
 			renderer.setScissorTest(false);
 			renderEyeIndex = 0;
 		} else {
-			const fullAspect = window.innerWidth / window.innerHeight;
-			camera2D.aspect = fullAspect;
+			const fullW = renderer.domElement.width;
+			const fullH = renderer.domElement.height;
+			camera2D.aspect = fullW / fullH;
 			camera2D.updateProjectionMatrix();
 			renderer.render(scene, camera2D);
 		}
@@ -1371,12 +1313,6 @@ function formatTime(seconds) {
 	}
 }
 
-function hidePlayButton() {
-	if (playBtn) {
-		playBtn.classList.add('hidden');
-	}
-}
-
 function enableNativeControls() {
 	if (video) {
 		video.controls = true;
@@ -1421,12 +1357,6 @@ function resetToOriginalState() {
 		
 		// Force video back to poster state by reloading
 		video.load();
-	}
-	
-	// Show the play button in center position
-	if (playBtn) {
-		playBtn.classList.remove('hidden');
-		playBtn.disabled = false;
 	}
 	
 	// Reset 2D mode if it was active
@@ -1529,19 +1459,10 @@ async function handleEnterVRButtonClick() {
 		console.error("Video element not found for VR button click.");
 		return;
 	}
-	
-	// Hide the play button after click
-	hidePlayButton();
-	
-	// Check if VR is supported
-	if (playBtn.dataset.xrSupported === "true") {
-		// VR is supported - use VR functionality
-		await actualSessionToggle();
-	} else {
-		// VR is not supported - start 2D rectilinear mode
-		start2DMode();
-	}
+
+	await actualSessionToggle();
 }
+window.enterNativeVR = handleEnterVRButtonClick;
 
 function start2DMode() {
 	if (!video || !renderer || !camera2D) {
