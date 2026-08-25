@@ -48,6 +48,20 @@ function sort_bookmarks(&$bookmarks) {
     });
 }
 
+function removeThumbnailCache($videoPath, $time) {
+    $cacheDir = __DIR__ . '/bookmark_thumbs';
+    if (!is_dir($cacheDir)) return;
+    $safePath = preg_replace('#/+#', '/', trim($videoPath, '/'));
+    $cachePath = $cacheDir . '/' . $safePath . '/' . number_format((float)$time, 6, '.', '') . '.jpg';
+    if (file_exists($cachePath)) {
+        unlink($cachePath);
+        $dir = dirname($cachePath);
+        if (is_dir($dir) && count(scandir($dir)) <= 2) {
+            rmdir($dir);
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['all'])) {
     $data = load();
     echo json_encode(['ret' => true, 'data' => $data]);
@@ -91,6 +105,17 @@ else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     else if ($action === 'remove' && $path !== '' && isset($input['id'])) {
         $data = load();
+        $removedBm = null;
+        foreach ($data[$path] ?? [] as $bm) {
+            if ((string)($bm['id'] ?? '') === (string)$input['id']) {
+                $removedBm = $bm;
+                break;
+            }
+        }
+        if ($removedBm) {
+            removeThumbnailCache($path, $removedBm['time']);
+        }
+
         $data[$path] = array_values(array_filter($data[$path] ?? [], function ($b) use ($input) {
             return (string)($b['id'] ?? '') !== (string)$input['id'];
         }));

@@ -284,6 +284,18 @@
         
         <script>
 
+            let FFMPEG_SERVER_URL = '';
+            function getFfmpegUrl() {
+                return FFMPEG_SERVER_URL || `http://192.168.0.101:3002`;
+            }
+            fetch('ffmpeg_config.json', { cache: 'no-store' })
+                .then(res => res.ok ? res.json() : Promise.reject())
+                .then(cfg => {
+                    const v = cfg && cfg.ffmpeg_server_url;
+                    if (typeof v === 'string' && v.trim()) FFMPEG_SERVER_URL = v.trim();
+                })
+                .catch(() => {});
+
             
 
             const zoomBoxview = document.getElementById('viewbox');
@@ -1152,11 +1164,37 @@
                     const json = await res.json();
                     if (json.ret) bookmarks = json.bookmarks;
                     renderBookmarkPanel();
+
+                    cacheBookmarkThumb(path, time);
+
                     return json.ret;
                 } catch (e) {
                     console.error('bookmarkAdd error', e);
                     return false;
                 }
+            }
+
+            function cacheBookmarkThumb(videoPath, seekTime) {
+                fetch(`${getFfmpegUrl()}/decode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoPath: videoPath, seekTime: seekTime })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success && result.base64 && result.base64.length > 100) {
+                        fetch('bookmark_thumb.php?cache=1', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                path: videoPath,
+                                time: seekTime,
+                                base64: result.base64
+                            })
+                        }).catch(() => {});
+                    }
+                })
+                .catch(() => {});
             }
 
             async function bookmarkRemove(path, id) {

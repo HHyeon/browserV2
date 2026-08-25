@@ -187,14 +187,34 @@
         const MAX_CONCURRENT_LOADS = 8;
 
         function enqueueThumb(imgEl, videoPath, seekTime) {
-            bmLoadQueue.push({ imgEl, videoPath, seekTime });
-            processBmLoadQueue();
+            const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(videoPath)}&time=${seekTime}`;
+
+            fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
+                .then(response => {
+                    if (response.ok) {
+                        return response.blob();
+                    }
+                    throw new Error('cache miss');
+                })
+                .then(blob => {
+                    if (!imgEl.isConnected) return;
+                    imgEl.src = URL.createObjectURL(blob);
+                })
+                .catch(() => {
+                    bmLoadQueue.push({ imgEl, videoPath, seekTime });
+                    processBmLoadQueue();
+                });
         }
 
         function processBmLoadQueue() {
             while (bmLoadQueue.length > 0 && activeBmLoads < MAX_CONCURRENT_LOADS) {
                 const job = bmLoadQueue.shift();
                 activeBmLoads++;
+
+                if (!job.imgEl.isConnected) {
+                    activeBmLoads--;
+                    continue;
+                }
 
                 fetch(`${getFfmpegUrl()}/decode`, {
                     method: 'POST',
@@ -209,6 +229,20 @@
                     if (!result.success || !result.base64 || result.base64.length <= 100) return;
                     if (!job.imgEl.isConnected) return;
                     job.imgEl.src = result.base64;
+
+                    fetch('bookmark_thumb.php?cache=1', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            path: job.videoPath,
+                            time: job.seekTime,
+                            base64: result.base64
+                        })
+                    }).then(r => r.json()).then(j => {
+                        console.log(`[BmThumbCache] saved: ${job.videoPath} @ ${job.seekTime}s`, j);
+                    }).catch(e => {
+                        console.error(`[BmThumbCache] save failed`, e);
+                    });
                 })
                 .catch(ex => {
                     console.error(`[BmThumb] decode failed ${job.videoPath} @ ${job.seekTime}s`, ex);

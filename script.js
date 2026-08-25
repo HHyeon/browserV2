@@ -67,7 +67,32 @@ function setPathPref(patch) {
 }
 
 
+// 🔑 XSS 방지: 파일명은 외부(파일시스템) 입력이므로 HTML/URL 컨텍스트마다 이스케이프
+function escapeHtml(s) {
+    return String(s ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function encodeUriSafe(s) {
+    return encodeURI(String(s ?? ''));
+}
+
+// 별점 버튼 클릭 위임 (inline onclick의 JS 컨텍스트 주입 제거)
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.rating-btn[data-rating-action]');
+    if (!btn) return;
+    const fname = btn.getAttribute('data-rating-fname');
+    if (!fname) return;
+    if (btn.dataset.ratingAction === 'up') onRatingUp(fname);
+    else onRatingDown(fname);
+});
+
 let dirlist = [];
+let dirFlagMap = {}; // fname -> is_dir (dirseek.php 제공, 항목별 프로브 요청 생략용)
 let item_w, item_h;
 let TopScrollView = document.getElementById('scroll-views');
 let MainTitle = document.getElementById('MainTitle');
@@ -399,6 +424,49 @@ let activeVideoLoads = 0;       // 현재 진행 중인 로드 개수
 const MAX_CONCURRENT_LOADS = 8; // 동시 로드 최대 개수
 let isPageFocused = !document.hidden; // 페이지 포커스 상태
 
+// 🔑 북마크 기반 썸네일: 전체 북마크 캐시 (vidpath → bookmarks array)
+let allBookmarks = {};
+let allVrBookmarks = {};
+let bookmarksLoaded = false;
+
+async function loadAllBookmarks() {
+    if (bookmarksLoaded) return;
+    try {
+        const [normalRes, vrRes] = await Promise.all([
+            fetch('bookmark.php?all=1', { cache: 'no-store' }),
+            fetch('bookmark.php?all=1&mode=vr', { cache: 'no-store' })
+        ]);
+        if (normalRes.ok) {
+            const normalJson = await normalRes.json();
+            allBookmarks = normalJson.data || {};
+        }
+        if (vrRes.ok) {
+            const vrJson = await vrRes.json();
+            allVrBookmarks = vrJson.data || {};
+        }
+        bookmarksLoaded = true;
+        console.log(`[BookmarkThumb] Loaded ${Object.keys(allBookmarks).length} normal + ${Object.keys(allVrBookmarks).length} VR bookmark entries`);
+    } catch (e) {
+        console.error('[BookmarkThumb] Failed to load bookmarks:', e);
+    }
+}
+
+function getBookmarksForVideo(vidpath) {
+    const normal = allBookmarks[vidpath];
+    const vr = allVrBookmarks[vidpath];
+    const all = [...(normal || []), ...(vr || [])];
+    return all.length > 0 ? all : null;
+}
+
+function pickBookmarkTime(vidpath, duration) {
+    const bms = getBookmarksForVideo(vidpath);
+    if (bms && bms.length > 0) {
+        const picked = bms[Math.floor(Math.random() * bms.length)];
+        return Math.min(picked.time, duration || picked.time).toFixed(1);
+    }
+    return null;
+}
+
 // 🔑 싱글 프레임 모드: 비디오당 1회만 썸네일 로드 후 중지
 let singleFrameMode = localStorage.getItem('singleFrameMode') === 'true';
 
@@ -527,9 +595,16 @@ const ThumbnailIntervalManager = {
         if(itemData.videoDuration === undefined) {
             console.warn(`[ThumbnailUpdate] Missing videoDuration for ${fname}, using default 30s`);
         }
-        itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 10) % videoDuration;
 
-        if(itemData.currentSeekTime < 30) itemData.currentSeekTime = 30; // minimum 30s start
+        // 🔑 북마크 타임스탬프 우선, 없으면 +10s 순회
+        const bookmarkTime = pickBookmarkTime(itemData.videoPath, videoDuration);
+        if (bookmarkTime) {
+            itemData.currentSeekTime = parseFloat(bookmarkTime);
+        } else {
+            itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 10) % videoDuration;
+            if(itemData.currentSeekTime < 30) itemData.currentSeekTime = 30;
+        }
+
         console.log(`[ThumbnailUpdate] Updating ${fname} at ${itemData.currentSeekTime.toFixed(1)}s / ${videoDuration}s`);
 
         const seekTime = itemData.currentSeekTime;
@@ -539,37 +614,68 @@ const ThumbnailIntervalManager = {
 
         this.updateProgress(fname, seekTime, videoDuration, progressBar);
 
-        fetch(`${getFfmpegUrl()}/decode`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoPath: itemData.videoPath, seekTime: seekTime })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        })
-        .then(result => {
-            if (!result.success || !result.base64 || result.base64.length <= 100) return;
-            if (!currentImgElement.isConnected) return;
-            currentImgElement.src = result.base64;
-            itemData.imgpath = result.base64;
-            this.hideError(currentFname);
+        // 🔑 캐시 우선: 북마크 썸네일 캐시 확인
+        const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(itemData.videoPath)}&time=${seekTime}`;
+        fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
+            .then(response => {
+                if (response.ok) return response.blob();
+                throw new Error('cache miss');
+            })
+            .then(blob => {
+                if (!currentImgElement.isConnected) return;
+                currentImgElement.src = URL.createObjectURL(blob);
+                this.hideError(currentFname);
+                if (!isPageFocused || document.hidden) return;
+                if (!this.activeItems.has(currentFname)) return;
+                if (!singleFrameMode) {
+                    this.tick(currentFname, currentImgElement);
+                }
+            })
+            .catch(() => {
+                // 캐시 미스: FFmpeg 디코딩
+                fetch(`${getFfmpegUrl()}/decode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoPath: itemData.videoPath, seekTime: seekTime })
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(result => {
+                    if (!result.success || !result.base64 || result.base64.length <= 100) return;
+                    if (!currentImgElement.isConnected) return;
+                    currentImgElement.src = result.base64;
+                    itemData.imgpath = result.base64;
+                    this.hideError(currentFname);
 
-            // 🔑 pause 시: 현재 디코딩 결과까지는 적용하고 다음 tick은 중지
-            if (!isPageFocused || document.hidden) return;
-            if (!this.activeItems.has(currentFname)) return;
+                    // 🔑 북마크 영상일 경우 캐시 저장
+                    const bms = getBookmarksForVideo(itemData.videoPath);
+                    if (bms) {
+                        fetch('bookmark_thumb.php?cache=1', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ path: itemData.videoPath, time: seekTime, base64: result.base64 })
+                        }).then(r => r.json()).then(j => {
+                            console.log(`[BmThumbCache] saved: ${itemData.videoPath} @ ${seekTime}s`, j);
+                        }).catch(e => {
+                            console.error(`[BmThumbCache] save failed`, e);
+                        });
+                    }
 
-            // 🔑 싱글 프레임 모드: 1회 로드 후 중지, 아닐 경우 연속 업데이트
-            if (!singleFrameMode) {
-                this.tick(currentFname, currentImgElement);
-            } else {
-                console.log(`[SingleFrame] Stopped continuous update for ${currentFname}`);
-            }
-        })
-        .catch(ex => {
-            console.error(`[ThumbnailUpdate] Error updating ${currentFname}:`, ex);
-            this.showError(currentFname, currentImgElement);
-        });
+                    if (!isPageFocused || document.hidden) return;
+                    if (!this.activeItems.has(currentFname)) return;
+                    if (!singleFrameMode) {
+                        this.tick(currentFname, currentImgElement);
+                    } else {
+                        console.log(`[SingleFrame] Stopped continuous update for ${currentFname}`);
+                    }
+                })
+                .catch(ex => {
+                    console.error(`[ThumbnailUpdate] Error updating ${currentFname}:`, ex);
+                    this.showError(currentFname, currentImgElement);
+                });
+            });
     },
 
     stopAll() {
@@ -717,99 +823,140 @@ async function processVideoLoadQueue() {
         }
 
 
-        // console.log(videoElement);
-        let seekTime = (Math.random() * videoDuration).toFixed(1);
-        if(seekTime < 30) seekTime = 30; // minimum 30s start
+        // 🔑 북마크 타임스탬프 우선, 없으면 랜덤
+        let seekTime;
+        const bookmarkTime = pickBookmarkTime(videoPath, videoDuration);
+        if (bookmarkTime) {
+            seekTime = bookmarkTime;
+            console.log(`[VideoLoad] Using bookmark time ${seekTime}s for ${videoInfo.name}`);
+        } else {
+            seekTime = (Math.random() * videoDuration).toFixed(1);
+            if(seekTime < 30) seekTime = 30;
+        }
 
-        console.log(`[FFmpeg] Decoding ${videoInfo.name} at ${seekTime}s via ${getFfmpegUrl()}`);
-
-        fetch(`${getFfmpegUrl()}/decode`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoPath, seekTime })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error(`FFmpeg decode failed: ${response.status}`);
-            return response.json();
-        })
-        .then(decodeResult => {
-            if (!decodeResult.success) throw new Error(decodeResult.error || 'FFmpeg decode failed');
-
-            const imagedatabase64 = decodeResult.base64;
-
-            if (!imagedatabase64 || imagedatabase64.length < 100) {
-                console.error(`[Cache] Invalid image data for ${videoInfo.fname}: ${imagedatabase64?.length || 0} bytes`);
-								console.log(`imagedatabase64 : ${imagedatabase64}`);
-                return;
-            }
-
-            console.log(`[Cache] Frame extracted: ${videoInfo.name} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
-
-            if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
-                makeitem_Store[videoInfo.fname].need_video_load = false;
-                makeitem_Store[videoInfo.fname].item_img = true;
-                makeitem_Store[videoInfo.fname].imgpath = imagedatabase64;
-                makeitem_Store[videoInfo.fname].videoPath = videoPath;
-                makeitem_Store[videoInfo.fname].videoDuration = videoElement.duration || videoDurationifFail;
-                makeitem_Store[videoInfo.fname].currentSeekTime = Math.random() * (videoElement.duration || videoDurationifFail);
-                console.log(`[Cache] Updated makeitem_Store for: ${videoInfo.fname}`);
-            }
-
-            if (videoElement.parentElement) {
-                videoElement.pause();
-                videoElement.removeAttribute('src');
-                videoElement.removeAttribute('poster');
-                videoElement.load();
-
-                while (videoElement.previousSibling && (
-                    videoElement.previousSibling.nodeType === Node.TEXT_NODE ||
-                    (videoElement.previousSibling.tagName === 'IMG' && !videoElement.previousSibling.dataset.fname)
-                )) {
-                    videoElement.previousSibling.remove();
-                }
-
-                const imgElement = document.createElement('img');
-                imgElement.src = imagedatabase64;
-                imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
-                imgElement.alt = 'Video thumbnail';
-                imgElement.dataset.fname = videoInfo.fname;
-                // 🔑 VR 영상: SBS 프레임 좌반만 표시
-                if(makeitem_Store[videoInfo.fname]?.item_vid180 === true) {
-                    imgElement.classList.add('vr-half');
-                }
-
-                const currentSeekTime = Math.random() * (videoElement.duration || videoDurationifFail);
-                const videoDuration = videoElement.duration || videoDurationifFail;
-
-                const existingProgressBar = videoElement.parentElement.querySelector(`.video-progress-bar[data-vidname="${CSS.escape(videoInfo.name)}"]`);
-                if (existingProgressBar) {
-                    existingProgressBar.style.width = `${(currentSeekTime / videoDuration) * 100}%`;
-                }
-
-                videoElement.parentElement.insertBefore(imgElement, videoElement);
-                videoElement.remove();
-                console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
-
-                if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
-                    makeitem_Store[videoInfo.fname].progressBar = existingProgressBar;
-                }
-
-                thumbnailObserver.observe(imgElement);
-            }
-        })
-        .catch(ex => {
-            console.error(`[VideoLoad] Error processing ${videoInfo.fname || 'unknown'}`, ex);
-            if (videoElement && videoElement.parentElement) {
-                ThumbnailIntervalManager.showError(videoInfo.fname, videoElement);
-            }
-        })
-        .finally(() => {
-            activeVideoLoads--;
-            processVideoLoadQueue();
-        });
+        // 🔑 캐시 우선: 북마크 썸네일 캐시 확인 → 히트 시 FFmpeg 스킵
+        const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(videoPath)}&time=${seekTime}`;
+        fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
+            .then(response => {
+                if (response.ok) return response.blob();
+                throw new Error('cache miss');
+            })
+            .then(blob => {
+                // 캐시 히트: 캐시된 이미지 사용
+                const cachedUrl = URL.createObjectURL(blob);
+                console.log(`[VideoLoad] Cache HIT for ${videoInfo.name} @ ${seekTime}s`);
+                applyThumbnail(videoInfo, videoElement, cachedUrl, videoDuration, seekTime, videoDurationifFail);
+                // 백그라운드에서 캐시 저장 불필요 (이미 캐시에 있음)
+            })
+            .catch(() => {
+                // 캐시 미스: FFmpeg 디코딩 → 캐시 저장
+                console.log(`[VideoLoad] Cache MISS for ${videoInfo.name}, decoding via FFmpeg`);
+                decodeAndApply(videoInfo, videoElement, videoPath, seekTime, videoDuration, videoDurationifFail);
+            });
     }
 }
 
+function applyThumbnail(videoInfo, videoElement, imageSrc, videoDuration, seekTime, videoDurationifFail) {
+    if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
+        makeitem_Store[videoInfo.fname].need_video_load = false;
+        makeitem_Store[videoInfo.fname].item_img = true;
+        makeitem_Store[videoInfo.fname].imgpath = imageSrc;
+        makeitem_Store[videoInfo.fname].videoPath = videoInfo.cacheKey || videoElement.src;
+        makeitem_Store[videoInfo.fname].videoDuration = videoDuration;
+        makeitem_Store[videoInfo.fname].currentSeekTime = parseFloat(seekTime);
+    }
+
+    if (videoElement.parentElement) {
+        videoElement.pause();
+        videoElement.removeAttribute('src');
+        videoElement.removeAttribute('poster');
+        videoElement.load();
+
+        while (videoElement.previousSibling && (
+            videoElement.previousSibling.nodeType === Node.TEXT_NODE ||
+            (videoElement.previousSibling.tagName === 'IMG' && !videoElement.previousSibling.dataset.fname)
+        )) {
+            videoElement.previousSibling.remove();
+        }
+
+        const imgElement = document.createElement('img');
+        imgElement.src = imageSrc;
+        imgElement.style.cssText = 'position: absolute; width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
+        imgElement.alt = 'Video thumbnail';
+        imgElement.dataset.fname = videoInfo.fname;
+        if(makeitem_Store[videoInfo.fname]?.item_vid180 === true) {
+            imgElement.classList.add('vr-half');
+        }
+
+        const existingProgressBar = videoElement.parentElement.querySelector(`.video-progress-bar[data-vidname="${CSS.escape(videoInfo.name)}"]`);
+        if (existingProgressBar) {
+            existingProgressBar.style.width = `${(parseFloat(seekTime) / videoDuration) * 100}%`;
+        }
+
+        videoElement.parentElement.insertBefore(imgElement, videoElement);
+        videoElement.remove();
+        console.log(`[Cache] DOM updated: video → image for ${videoInfo.fname}`);
+
+        if (videoInfo.fname && makeitem_Store[videoInfo.fname]) {
+            makeitem_Store[videoInfo.fname].progressBar = existingProgressBar;
+        }
+
+        thumbnailObserver.observe(imgElement);
+    }
+}
+
+function decodeAndApply(videoInfo, videoElement, videoPath, seekTime, videoDuration, videoDurationifFail) {
+    console.log(`[FFmpeg] Decoding ${videoInfo.name} at ${seekTime}s via ${getFfmpegUrl()}`);
+
+    fetch(`${getFfmpegUrl()}/decode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoPath, seekTime })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`FFmpeg decode failed: ${response.status}`);
+        return response.json();
+    })
+    .then(decodeResult => {
+        if (!decodeResult.success) throw new Error(decodeResult.error || 'FFmpeg decode failed');
+
+        const imagedatabase64 = decodeResult.base64;
+
+        if (!imagedatabase64 || imagedatabase64.length < 100) {
+            console.error(`[Cache] Invalid image data for ${videoInfo.fname}: ${imagedatabase64?.length || 0} bytes`);
+            console.log(`imagedatabase64 : ${imagedatabase64}`);
+            return;
+        }
+
+        console.log(`[Cache] Frame extracted: ${videoInfo.name} (${(imagedatabase64.length / 1024).toFixed(1)}KB)`);
+
+        // 🔑 북마크 영상일 경우 캐시 저장
+        const bms = getBookmarksForVideo(videoPath);
+        if (bms) {
+            fetch('bookmark_thumb.php?cache=1', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: videoPath, time: parseFloat(seekTime), base64: imagedatabase64 })
+            }).then(r => r.json()).then(j => {
+                console.log(`[BmThumbCache] saved: ${videoPath} @ ${seekTime}s`, j);
+            }).catch(e => {
+                console.error(`[BmThumbCache] save failed`, e);
+            });
+        }
+
+        applyThumbnail(videoInfo, videoElement, imagedatabase64, videoDuration, seekTime, videoDurationifFail);
+    })
+    .catch(ex => {
+        console.error(`[VideoLoad] Error processing ${videoInfo.fname || 'unknown'}`, ex);
+        if (videoElement && videoElement.parentElement) {
+            ThumbnailIntervalManager.showError(videoInfo.fname, videoElement);
+        }
+    })
+    .finally(() => {
+        activeVideoLoads--;
+        processVideoLoadQueue();
+    });
+}
 
 let scrolleditemidx = 0;
 let scrolleditemidx_store = 0;
@@ -949,8 +1096,12 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         let cacheKey = '';  // 🔑 비디오 파일의 IndexedDB 캐시 키
         
         try {
-            const jsondata = await dirseek(belowdirseekpath);
-            if(jsondata["ret"]) // openable directory
+            // 🔑 dirseek의 is_dir 플래그로 파일임이 확인된 항목은 프로브 요청 생략
+            let jsondata = null;
+            if (dirFlagMap[fname] !== false) {
+                jsondata = await dirseek(belowdirseekpath);
+            }
+            if(jsondata && jsondata["ret"]) // openable directory
             {
                 item_enterable = true;
     
@@ -1084,14 +1235,14 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         }
 
         linkelemnts = ``;
-        
+
         if(isVR)
         {
-            linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/${getVRViewerPath()}?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
+            linkelemnts += `<a href="${document.location.origin}${document.location.pathname}/${getVRViewerPath()}?p=${encodeUriSafe(vidpath)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ""}" target="_blank"></a>`
         }
         else
         {
-            linkelemnts += `<a href=${document.location.origin}${document.location.pathname}/videoview.html?p=${vidpath}${paramfind != null ? `&f=${paramfind}` : ""} target="_blank"></a>`
+            linkelemnts += `<a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${encodeUriSafe(vidpath)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ""}" target="_blank"></a>`
         }
     }
     else
@@ -1121,14 +1272,14 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         let playvidBadge = '';
         if(hasMp4) {
             playvidBadge = `<div class="badge">
-                playvid 
-                <a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+                playvid
+                <a href="${document.location.origin}${document.location.pathname}/videoview.html?p=${encodeUriSafe(belowpath)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ""}" target="_blank" class="item-badge-link"></a>
             </div>`;
         }
         if (hasVR) {
             playvidBadge += `<div class="badge">
-                playvid180 
-                <a href="${document.location.origin}${document.location.pathname}/${getVRViewerPath()}?p=${belowpath}${paramfind != null ? `&f=${paramfind}` : ""}" target="_blank" class="item-badge-link"></a>
+                playvid180
+                <a href="${document.location.origin}${document.location.pathname}/${getVRViewerPath()}?p=${encodeUriSafe(belowpath)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ""}" target="_blank" class="item-badge-link"></a>
             </div>`;
         }
         let imageviewBadge = '';
@@ -1146,10 +1297,10 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
 
         const currentRating = makeitem_stored?.rating ?? (await getRating(fname));
         const ratingBadge = `
-        <div class="rating-container" data-rating-fname="${fname}">
-            <div class="rating-btn" onclick="onRatingUp('${fname}')">▲</div>
+        <div class="rating-container" data-rating-fname="${escapeHtml(fname)}">
+            <div class="rating-btn" data-rating-action="up" data-rating-fname="${escapeHtml(fname)}">▲</div>
             <div class="rating-value">${currentRating}</div>
-            <div class="rating-btn" onclick="onRatingDown('${fname}')">▼</div>
+            <div class="rating-btn" data-rating-action="down" data-rating-fname="${escapeHtml(fname)}">▼</div>
         </div>
         `;
         
@@ -1163,32 +1314,33 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
         `;
         
         if(hasHighImageRatio) {
-            linkelemnts += `<a href="${document.location.origin}${document.location.pathname}/imageview.html?p=${belowpath}" target="_blank"></a>`;
+            linkelemnts += `<a href="${document.location.origin}${document.location.pathname}/imageview.html?p=${encodeUriSafe(belowpath)}" target="_blank"></a>`;
         }
         else {
-            linkelemnts += parampathgiven ? `<a href="${enter_element}/${fname}"></a>` : `<a href="${enter_element}?p=${fname}"></a>`;
+            const encodedFname = encodeURIComponent(fname);
+            linkelemnts += parampathgiven ? `<a href="${enter_element}/${encodedFname}"></a>` : `<a href="${enter_element}?p=${encodedFname}"></a>`;
         }
     }
 
     // 🔑 비디오 요소에 메타데이터 속성 추가 (processVideoLoadQueue에서 사용)
     // 주의: IndexedDB에서는 원본 경로(인코딩 X)를 사용
     const cacheKeyForAttr = parampath + "/" + fname;
-    const imgAttrs = item_vid ? ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"` : '';
+    const imgAttrs = item_vid ? ` data-fname="${escapeHtml(fname)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}"` : '';
     const imgDragAttrs = 'draggable="false" style="pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;"';
-    
-    imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover;" ${imgAttrs}>`;
+
+    imgelements = `<img src="${escapeHtml(imgpath)}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover;" ${imgAttrs}>`;
     const isVRItem = item_vid && makeitem_Store[fname]?.item_vid180 === true;
     const vrHalfClass = isVRItem ? 'vr-half' : '';
     if (item_vid) {
-        imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" class="${vrHalfClass}" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
+        imgelements = `<img src="${escapeHtml(imgpath)}" loading=lazyloading alt="Cover" class="${vrHalfClass}" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
     } else {
-        imgelements = `<img src="${imgpath}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
+        imgelements = `<img src="${escapeHtml(imgpath)}" loading=lazyloading alt="Cover" style="position: absolute; width: 100%; height: 100%; object-fit:cover; pointer-events: none; -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none;" draggable="false" ${imgAttrs}>`;
     }
     let cachedAttrs = '';
     if(item_vid) {
-        cachedAttrs = ` data-fname="${fname}" data-cache-key="${cacheKeyForAttr}"`;
+        cachedAttrs = ` data-fname="${escapeHtml(fname)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}"`;
     }
-    let videlements = `<video muted src="${vidpath}" preload="metadata" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
+    let videlements = `<video muted src="${escapeHtml(vidpath)}" preload="metadata" style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></video>`;
 
     // let videlements = `<div style="position: absolute; width: 100%; height: 100%; object-fit: cover;"${cachedAttrs} ></div>`;
     
@@ -1201,7 +1353,7 @@ async function makeitem(w,h,x,y,fname,text,force=false) {
     ret = `<div class="item" style="width: ${w-4}px; height: ${h-4}px; transform: translate(${x}px, ${y}px); position: absolute; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; pointer-events: auto; ">
     <div style="box-sizing: border-box; overflow: hidden; position: absolute; width: 100%; height: 100%; ">
         <div class="layer-text" style="${layerTextStyle}">
-            <h3>${text}</h3>
+            <h3>${escapeHtml(text)}</h3>
         </div>
         ` +
         (item_enterable ? linkelemnts : '') +
@@ -1318,15 +1470,20 @@ async function startup() {
     makeitem_Store = {};
     vid180Cache = {};
 
+    // 🔑 북마크 데이터 프리로드 (썸네일 타임스탬프 결정용)
+    loadAllBookmarks();
+
     const jsondata = await dirseek(parampath);
     if(jsondata["ret"])
     {
         let queryedlist = jsondata["data"];
 
+        dirFlagMap = {};
         queryedlist.forEach(each => {
 
             const name = each["d"];
             const time = Date.parse(each["t"]);
+            dirFlagMap[name] = (each["dir"] === true); // 🔑 서버 제공 is_dir 플래그
             
             let ftext;
             try
