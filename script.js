@@ -462,7 +462,7 @@ function pickBookmarkTime(vidpath, duration) {
     const bms = getBookmarksForVideo(vidpath);
     if (bms && bms.length > 0) {
         const picked = bms[Math.floor(Math.random() * bms.length)];
-        return Math.min(picked.time, duration || picked.time).toFixed(1);
+        return Math.min(picked.time, duration || picked.time);
     }
     return null;
 }
@@ -599,7 +599,7 @@ const ThumbnailIntervalManager = {
         // 🔑 북마크 타임스탬프 우선, 없으면 +10s 순회
         const bookmarkTime = pickBookmarkTime(itemData.videoPath, videoDuration);
         if (bookmarkTime) {
-            itemData.currentSeekTime = parseFloat(bookmarkTime);
+            itemData.currentSeekTime = bookmarkTime;
         } else {
             itemData.currentSeekTime = ((itemData.currentSeekTime || 0) + 10) % videoDuration;
             if(itemData.currentSeekTime < 30) itemData.currentSeekTime = 30;
@@ -830,7 +830,7 @@ async function processVideoLoadQueue() {
             seekTime = bookmarkTime;
             console.log(`[VideoLoad] Using bookmark time ${seekTime}s for ${videoInfo.name}`);
         } else {
-            seekTime = (Math.random() * videoDuration).toFixed(1);
+            seekTime = Math.random() * videoDuration;
             if(seekTime < 30) seekTime = 30;
         }
 

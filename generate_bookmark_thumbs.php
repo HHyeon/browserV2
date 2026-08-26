@@ -17,11 +17,15 @@ if (file_exists($configFile)) {
 }
 if (!$ffmpegUrl) $ffmpegUrl = 'http://192.168.0.101:3002';
 
-// ─── Parse --workers=N from CLI args ───
+// ─── Parse CLI args ───
 $numWorkers = 6;
+$pathFilter = '';
 foreach ($argv as $arg) {
     if (preg_match('/^--workers=(\d+)$/', $arg, $m)) {
         $numWorkers = max(1, min(16, (int)$m[1]));
+    }
+    if (preg_match('/^--path=(.+)$/', $arg, $m)) {
+        $pathFilter = rtrim($m[1], '/');
     }
 }
 
@@ -189,9 +193,9 @@ foreach (['' => 'normal', 'vr' => 'vr'] as $mode => $label) {
     foreach ($data as $path => $bookmarks) {
         if (!isset($grouped[$path])) $grouped[$path] = [];
         foreach ($bookmarks as $bm) {
-            $time = (float)$bm['time'];
-            if (!isset($grouped[$path][$time])) {
-                $grouped[$path][$time] = $mode;
+            $timeKey = number_format((float)$bm['time'], 6, '.', '');
+            if (!isset($grouped[$path][$timeKey])) {
+                $grouped[$path][$timeKey] = $mode;
             }
         }
     }
@@ -204,9 +208,16 @@ $allJobs = [];
 foreach ($grouped as $path => $times) {
     $sortedTimes = array_keys($times);
     sort($sortedTimes);
-    foreach ($sortedTimes as $time) {
-        $allJobs[] = ['path' => $path, 'time' => $time, 'mode' => $times[$time]];
+    foreach ($sortedTimes as $timeKey) {
+        $allJobs[] = ['path' => $path, 'time' => (float)$timeKey, 'mode' => $times[$timeKey]];
     }
+}
+
+// ─── Filter by path if --path specified ───
+if ($pathFilter) {
+    $allJobs = array_values(array_filter($allJobs, function ($job) use ($pathFilter) {
+        return $job['path'] === $pathFilter || str_starts_with($job['path'], $pathFilter . '/');
+    }));
 }
 
 $total = count($allJobs);
@@ -324,6 +335,7 @@ $childPids = [];
 if ($isCLI) {
     fprintf(STDERR, "=== Bookmark Thumbnail Generator (Parallel) ===\n");
     fprintf(STDERR, "Total: $total (normal: $normalCount, VR: $vrCount)\n");
+    if ($pathFilter) fprintf(STDERR, "Path filter: %s\n", $pathFilter);
     fprintf(STDERR, "Workers: $numWorkers\n");
     fprintf(STDERR, "FFmpeg server: $ffmpegUrl\n");
     fprintf(STDERR, "Ctrl+C to stop gracefully (all current decodes will finish)\n\n");
