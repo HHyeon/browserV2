@@ -92,7 +92,7 @@ function loadBookmarkFile($mode) {
 function decodeFrame($videoPath, $seekTime, $retries = 2) {
     global $ffmpegUrl;
     for ($attempt = 0; $attempt <= $retries; $attempt++) {
-        if ($attempt > 0) sleep(1);
+        if ($attempt > 0) sleep(3);
 
         $url = "$ffmpegUrl/decode";
         $payload = json_encode([

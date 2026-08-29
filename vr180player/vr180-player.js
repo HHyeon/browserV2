@@ -24,6 +24,7 @@ let vrControlPanel;
 // 2D Camera Controls
 let camera2D;
 let cameraRotation = { yaw: 0, pitch: 0 };
+let cameraTarget = { yaw: 0, pitch: 0 };
 let cameraVelocity = { yaw: 0, pitch: 0 };
 let isDragging = false;
 window.getIsDragging = () => isDragging;
@@ -35,7 +36,9 @@ let lastTouchY = 0;
 // 2D Control Constants
 const MOUSE_SENSITIVITY = 0.004;
 const TOUCH_SENSITIVITY = 0.003;
-const MOMENTUM_DAMPING = 0.8; // Reduced from 0.9 for 50% less inertia
+const CAMERA_LERP = 0.08;
+const ZOOM_LERP = 0.06;
+const MOMENTUM_DAMPING = 0.8;
 const MAX_PITCH = Math.PI * (60 / 180); // ~60 degrees - edge of VR180 content aligns with viewport edge
 const MAX_YAW = Math.PI * (60 / 180); // ~60 degrees - edge of VR180 content aligns with viewport edge
 
@@ -44,6 +47,7 @@ const MIN_FOV = 25;          // Maximum zoom (approximately 3x)
 const MAX_FOV = 100;          // Default FOV (no zoom)
 const ZOOM_STEP = 0.05;       // Zoom step per scroll/pinch event
 let cameraZoom = 1.3;        // Current zoom factor (1.0 = no zoom, 3.0 = 3x zoom)
+let cameraZoomTarget = 1.3;  // Zoom target for smooth interpolation
 let lastTouchDistance = 0;    // For pinch gesture detection
 
 // Figma design constants (for layout reference)
@@ -800,8 +804,11 @@ function hidePanel() {
 
 function updateCameraFOV() {
 	if (!camera2D) return;
+	
+	// 부드러운 줌 보간
+	cameraZoom += (cameraZoomTarget - cameraZoom) * ZOOM_LERP;
+	
 	const fov = MAX_FOV / cameraZoom;
-	// console.log(`Updating Camera FOV: ${fov.toFixed(2)}`);	
 	camera2D.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
 	camera2D.updateProjectionMatrix();
 }
@@ -872,25 +879,30 @@ function onWindowResize()
 function updateCameraRotation() {
 	if (!camera2D) return;
 	
-	// Apply momentum
-	cameraRotation.yaw += cameraVelocity.yaw;
-	cameraRotation.pitch += cameraVelocity.pitch;
+	if (isDragging) {
+		// 드래그 중: velocity 초기화
+		cameraVelocity.yaw = 0;
+		cameraVelocity.pitch = 0;
+	} else {
+		// 드래그 종료 후: 관성을 target에 적용
+		cameraTarget.yaw += cameraVelocity.yaw;
+		cameraTarget.pitch += cameraVelocity.pitch;
+		
+		cameraVelocity.yaw *= MOMENTUM_DAMPING;
+		cameraVelocity.pitch *= MOMENTUM_DAMPING;
+		
+		if (Math.abs(cameraVelocity.yaw) < 0.001) cameraVelocity.yaw = 0;
+		if (Math.abs(cameraVelocity.pitch) < 0.001) cameraVelocity.pitch = 0;
+	}
 	
-	// Constrain pitch (vertical rotation)
-	cameraRotation.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, cameraRotation.pitch));
+	// target 제약
+	cameraTarget.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, cameraTarget.pitch));
+	cameraTarget.yaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, cameraTarget.yaw));
 	
-	// Constrain yaw (horizontal rotation) to VR180 content boundaries
-	cameraRotation.yaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, cameraRotation.yaw));
+	// 부드러운 보간 (lerp)
+	cameraRotation.yaw += (cameraTarget.yaw - cameraRotation.yaw) * CAMERA_LERP;
+	cameraRotation.pitch += (cameraTarget.pitch - cameraRotation.pitch) * CAMERA_LERP;
 	
-	// Apply damping to velocity
-	cameraVelocity.yaw *= MOMENTUM_DAMPING;
-	cameraVelocity.pitch *= MOMENTUM_DAMPING;
-	
-	// Stop very small velocities
-	if (Math.abs(cameraVelocity.yaw) < 0.001) cameraVelocity.yaw = 0;
-	if (Math.abs(cameraVelocity.pitch) < 0.001) cameraVelocity.pitch = 0;
-	
-	// Apply rotation to camera
 	camera2D.rotation.set(cameraRotation.pitch, cameraRotation.yaw, 0);
 }
 
@@ -942,13 +954,12 @@ function onMouseWheel(event) {
 	
 	// Zoom in (scroll up) or zoom out (scroll down)
 	const direction = event.deltaY > 0 ? -1 : 1;
-	cameraZoom += direction * ZOOM_STEP;
-	cameraZoom = Math.max(1.0, Math.min(3.0, cameraZoom));
+	cameraZoomTarget += direction * ZOOM_STEP;
+	cameraZoomTarget = Math.max(0.6, Math.min(3.0, cameraZoomTarget));
 
-	console.log(`Camera Zoom: ${cameraZoom.toFixed(2)}`);
+	console.log(`Camera Zoom: ${cameraZoomTarget.toFixed(2)}`);
 	
 	updateCameraFOV();
-	// show2DControlPanel();
 }
 
 function onMouseMove(event) {
@@ -957,8 +968,13 @@ function onMouseMove(event) {
 	const deltaX = event.clientX - lastMouseX;
 	const deltaY = event.clientY - lastMouseY;
 	
-	cameraVelocity.yaw = (deltaX * MOUSE_SENSITIVITY);// / cameraZoom;
-	cameraVelocity.pitch = (deltaY * MOUSE_SENSITIVITY);// / cameraZoom;
+	// target에 직접 적용 (lerp로 부드럽게 따라옴)
+	cameraTarget.yaw += deltaX * MOUSE_SENSITIVITY;
+	cameraTarget.pitch += deltaY * MOUSE_SENSITIVITY;
+	
+	// 드래그 종료 후 관성을 위해 velocity에 누적
+	cameraVelocity.yaw += deltaX * MOUSE_SENSITIVITY;
+	cameraVelocity.pitch += deltaY * MOUSE_SENSITIVITY;
 	
 	lastMouseX = event.clientX;
 	lastMouseY = event.clientY;
@@ -1004,8 +1020,13 @@ function onTouchMove(event) {
 		const deltaX = event.touches[0].clientX - lastTouchX;
 		const deltaY = event.touches[0].clientY - lastTouchY;
 		
-		cameraVelocity.yaw = deltaX * TOUCH_SENSITIVITY;
-		cameraVelocity.pitch = deltaY * TOUCH_SENSITIVITY;
+		// target에 직접 적용
+		cameraTarget.yaw += deltaX * TOUCH_SENSITIVITY;
+		cameraTarget.pitch += deltaY * TOUCH_SENSITIVITY;
+		
+		// 드래그 종료 후 관성을 위해 누적
+		cameraVelocity.yaw += deltaX * TOUCH_SENSITIVITY;
+		cameraVelocity.pitch += deltaY * TOUCH_SENSITIVITY;
 		
 		lastTouchX = event.touches[0].clientX;
 		lastTouchY = event.touches[0].clientY;
@@ -1026,6 +1047,7 @@ function render2D() {
 	if (!is2DMode) return;
 	
 	updateCameraRotation();
+	updateCameraFOV();
 	
 	if (renderer && camera2D && scene) {
 		if (isStereoMode) {
