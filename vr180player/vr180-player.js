@@ -955,7 +955,7 @@ function onMouseWheel(event) {
 	// Zoom in (scroll up) or zoom out (scroll down)
 	const direction = event.deltaY > 0 ? -1 : 1;
 	cameraZoomTarget += direction * ZOOM_STEP;
-	cameraZoomTarget = Math.max(0.6, Math.min(3.0, cameraZoomTarget));
+	cameraZoomTarget = Math.max(1.0, Math.min(3.0, cameraZoomTarget));
 
 	console.log(`Camera Zoom: ${cameraZoomTarget.toFixed(2)}`);
 	
@@ -968,13 +968,17 @@ function onMouseMove(event) {
 	const deltaX = event.clientX - lastMouseX;
 	const deltaY = event.clientY - lastMouseY;
 	
+	// 줌 레벨에 따른 민감도 비율 (zoom 1.0=1.0, zoom 3.0=0.3)
+	const zoomRatio = 1.0 - (cameraZoomTarget - 1.0) * 0.35;
+	const sensitivity = MOUSE_SENSITIVITY * zoomRatio;
+	
 	// target에 직접 적용 (lerp로 부드럽게 따라옴)
-	cameraTarget.yaw += deltaX * MOUSE_SENSITIVITY;
-	cameraTarget.pitch += deltaY * MOUSE_SENSITIVITY;
+	cameraTarget.yaw += deltaX * sensitivity;
+	cameraTarget.pitch += deltaY * sensitivity;
 	
 	// 드래그 종료 후 관성을 위해 velocity에 누적
-	cameraVelocity.yaw += deltaX * MOUSE_SENSITIVITY;
-	cameraVelocity.pitch += deltaY * MOUSE_SENSITIVITY;
+	cameraVelocity.yaw += deltaX * sensitivity;
+	cameraVelocity.pitch += deltaY * sensitivity;
 	
 	lastMouseX = event.clientX;
 	lastMouseY = event.clientY;
@@ -1020,13 +1024,17 @@ function onTouchMove(event) {
 		const deltaX = event.touches[0].clientX - lastTouchX;
 		const deltaY = event.touches[0].clientY - lastTouchY;
 		
+		// 줌 레벨에 따른 민감도 비율
+		const zoomRatio = 1.0 - (cameraZoomTarget - 1.0) * 0.35;
+		const sensitivity = TOUCH_SENSITIVITY * zoomRatio;
+		
 		// target에 직접 적용
-		cameraTarget.yaw += deltaX * TOUCH_SENSITIVITY;
-		cameraTarget.pitch += deltaY * TOUCH_SENSITIVITY;
+		cameraTarget.yaw += deltaX * sensitivity;
+		cameraTarget.pitch += deltaY * sensitivity;
 		
 		// 드래그 종료 후 관성을 위해 누적
-		cameraVelocity.yaw += deltaX * TOUCH_SENSITIVITY;
-		cameraVelocity.pitch += deltaY * TOUCH_SENSITIVITY;
+		cameraVelocity.yaw += deltaX * sensitivity;
+		cameraVelocity.pitch += deltaY * sensitivity;
 		
 		lastTouchX = event.touches[0].clientX;
 		lastTouchY = event.touches[0].clientY;
