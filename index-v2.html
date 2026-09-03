@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="title">BrowserV2</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #252525;
+            --bg-card: #2a2a2a;
+            --text-primary: #e8e8e8;
+            --text-secondary: #999;
+            --accent: #007bff;
+            --accent-hover: #0056b3;
+            --border: #3a3a3a;
+            --shadow: rgba(0,0,0,0.4);
+            --card-radius: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        body.menu-open { overflow: hidden; }
+
+        /* ===== Header ===== */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            user-select: none;
+        }
+
+        .header-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent);
+            white-space: nowrap;
+            cursor: default;
+        }
+
+        .header-search {
+            flex: 1;
+            max-width: 360px;
+            position: relative;
+        }
+
+        .header-search input {
+            width: 100%;
+            padding: 8px 14px 8px 34px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .header-search input:focus {
+            border-color: var(--accent);
+        }
+
+        .header-search input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .header-search::before {
+            content: '🔍';
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+        }
+
+        .hbtn {
+            padding: 6px 12px;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .hbtn:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border-color: #555;
+        }
+
+        .hbtn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .hbtn-icon {
+            padding: 6px 8px;
+            font-size: 14px;
+        }
+
+        .header-sep {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+        }
+
+        /* ===== Grid ===== */
+        .grid-wrap {
+            padding: 12px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+        }
+
+        /* ===== Card ===== */
+        .card {
+            position: relative;
+            border-radius: var(--card-radius);
+            overflow: hidden;
+            background: var(--bg-card);
+            border: 2px solid transparent;
+            aspect-ratio: 4/3;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .card a {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .card img {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            -webkit-user-drag: none;
+            user-select: none;
+        }
+
+        .card img.vr-half {
+            width: 200% !important;
+            object-position: center;
+        }
+
+        .card video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Card Title Overlay */
+        .card-title-layer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px 10px;
+            z-index: 3;
+            background: linear-gradient(transparent, rgba(0,0,0,0.75));
+        }
+
+        .card-title-layer h3 {
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            word-break: break-all;
+            line-height: 1.3;
+        }
+
+        /* Card Badges */
+        .card-badges {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 4;
+        }
+
+        .cbadge {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 4px;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .cbadge a {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .cbadge-playvid { background: rgba(0, 123, 255, 0.75); }
+        .cbadge-playvid180 { background: rgba(138, 43, 226, 0.75); }
+
+        /* Card Rating */
+        .card-rating {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            z-index: 4;
+        }
+
+        .cr-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #fff;
+            background: rgba(255, 155, 0, 0.55);
+            border-radius: 3px;
+            cursor: pointer;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+            transition: background 0.15s;
+        }
+
+        .cr-btn:hover {
+            background: rgba(255, 155, 0, 0.85);
+        }
+
+        .cr-val {
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            line-height: 1;
+        }
+
+        /* Video progress bar */
+        .vid-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: rgba(0,0,0,0.5);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .vid-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: rgba(0, 200, 255, 0.8);
+            transition: width 0.3s ease;
+        }
+
+        .thumbnail-error-icon {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 22px;
+            height: 22px;
+            background: rgba(255, 0, 0, 0.8);
+            border-radius: 50%;
+            color: #fff;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* ===== Empty State ===== */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state h2 {
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        /* ===== Toast ===== */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            z-index: 2000;
+            white-space: nowrap;
+        }
+
+        .toast.show { opacity: 1; }
+
+        /* ===== Search Panel (legacy) ===== */
+        #search_panel {
+            z-index: 150;
+            visibility: hidden;
+            position: fixed;
+            background-color: rgba(0,0,0,0.6);
+            left: 0;
+            top: 10%;
+            width: 100%;
+            height: 5%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #typing_panel {
+            text-align: center;
+            font-size: 24px;
+            color: #fff;
+        }
+
+        /* ===== Shortcuts Modal ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+            max-width: 420px;
+            width: 90%;
+        }
+
+        .modal-box h3 {
+            font-size: 16px;
+            margin-bottom: 14px;
+        }
+
+        .sc-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        .sc-key {
+            background: var(--bg-card);
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #777; }
+    </style>
+</head>
+<body oncontextmenu="return false">
+
+    <div id="search_panel">
+        <h1 id="typing_panel"></h1>
+    </div>
+
+    <div class="toast" id="action-toast"></div>
+
+    <canvas hidden></canvas>
+
+    <header class="header">
+        <span class="header-logo">BrowserV2</span>
+        <div class="header-search">
+            <input type="text" id="headerSearchInput" placeholder="검색 (Enter) / Backspace: 상위">
+        </div>
+        <div class="header-actions">
+            <button class="hbtn active" data-sort="1" title="최신순 (1)">최신</button>
+            <button class="hbtn" data-sort="2" title="이름순 (2)">이름</button>
+            <button class="hbtn" data-sort="3" title="데일리 셔플 (3)">셔플</button>
+            <button class="hbtn" data-sort="4" title="랜덤 (4)">랜덤</button>
+            <div class="header-sep"></div>
+            <button class="hbtn" id="btnRatingToggle" title="별점 정렬 (0)">별점</button>
+            <button class="hbtn" id="btnSingleFrame" title="싱글프레임 (S)">1F</button>
+            <div class="header-sep"></div>
+            <button class="hbtn hbtn-icon" id="btnBookmarks" title="북마크 (B)">★</button>
+            <button class="hbtn hbtn-icon" id="btnHelp" title="도움말 (?)">?</button>
+        </div>
+    </header>
+
+    <div class="grid-wrap">
+        <div class="grid" id="grid"></div>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display:none;">
+        <h2 id="emptyTitle"></h2>
+    </div>
+
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal-box">
+            <h3>키보드 단축키</h3>
+            <div class="sc-row"><span>검색</span><span class="sc-key">Enter</span></div>
+            <div class="sc-row"><span>검색 취소</span><span class="sc-key">Escape</span></div>
+            <div class="sc-row"><span>상위 디렉토리</span><span class="sc-key">Backspace</span></div>
+            <div class="sc-row"><span>최신순</span><span class="sc-key">1</span></div>
+            <div class="sc-row"><span>이름순</span><span class="sc-key">2</span></div>
+            <div class="sc-row"><span>데일리 셔플</span><span class="sc-key">3</span></div>
+            <div class="sc-row"><span>랜덤</span><span class="sc-key">4</span></div>
+            <div class="sc-row"><span>별점 정렬 토글</span><span class="sc-key">0</span></div>
+            <div class="sc-row"><span>싱글프레임 토글</span><span class="sc-key">S</span></div>
+            <div class="sc-row"><span>강제 새로고침</span><span class="sc-key">\</span></div>
+            <div class="sc-row"><span>북마크 열기</span><span class="sc-key">B</span></div>
+            <div class="sc-row"><span>이 도움말</span><span class="sc-key">?</span></div>
+            <div style="text-align:right;margin-top:12px;">
+                <button class="hbtn" onclick="document.getElementById('helpModal').classList.remove('show')">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ============================================================
+        // CONFIG
+        // ============================================================
+        let FFMPEG_SERVER_URL = '';
+        function getFfmpegUrl() { return FFMPEG_SERVER_URL || 'http://192.168.0.101:3002'; }
+        fetch('ffmpeg_config.json', { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(c => { const v = c && c.ffmpeg_server_url; if (typeof v === 'string' && v.trim()) FFMPEG_SERVER_URL = v.trim(); })
+            .catch(() => {});
+
+        let webxrSupported = false;
+        if (navigator.xr) {
+            navigator.xr.isSessionSupported('immersive-vr').then(s => { webxrSupported = s; }).catch(() => {});
+        }
+        function getVRViewerPath() { return webxrSupported ? 'videoview180-vr.html' : 'videoview180.html'; }
+
+        // ============================================================
+        // URL PARAMS
+        // ============================================================
+        const BASE_DIR = document.location.origin + document.location.pathname.replace(/[^/]*$/, '');
+        const urlParams = new URL(window.location.href).searchParams;
+        let paramfind = urlParams.get('f');
+        let parampath = urlParams.get('p');
+        if (parampath != null) document.title = parampath.substring(parampath.lastIndexOf('/') + 1);
+        let parampathgiven = true;
+        if (parampath == '.' || parampath == null) { parampathgiven = false; }
+        else {
+            if (parampath[parampath.length - 1] == '/') parampath = parampath.substring(0, parampath.length - 1);
+            parampath = encodeURI(parampath);
+        }
+        if (parampath == null) parampath = '.';
+
+        // ============================================================
+        // PATH PREFS (localStorage)
+        // ============================================================
+        function getPathPrefs() { try { return JSON.parse(localStorage.getItem('listordertype_paths') || '{}'); } catch(e) { return {}; } }
+        function getPathPref() { return getPathPrefs()[parampath] || {}; }
+        function setPathPref(patch) {
+            const p = getPathPrefs();
+            p[parampath] = { ...(p[parampath] || {}), ...patch };
+            localStorage.setItem('listordertype_paths', JSON.stringify(p));
+        }
+
+        // ============================================================
+        // UTIL
+        // ============================================================
+        function escapeHtml(s) {
+            return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+        }
+        function encodeUriSafe(s) { return encodeURI(String(s ?? '')); }
+        function isImageExt(n) {
+            const a = n.toLowerCase();
+            return a.endsWith('jpeg') || a.endsWith('jpg') || a.endsWith('png') || a.endsWith('webp') || a.endsWith('gif');
+        }
+
+        // ============================================================
+        // API
+        // ============================================================
+        async function dirseek(param) {
+            try {
+                const r = await fetch(`dirseek.php?x=${param}`, { cache: 'no-store' });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return await r.json();
+            } catch (e) { console.error('dirseek failed', e); return { ret: false, data: [] }; }
+        }
+
+        async function getRating(folderName) {
+            try {
+                const r = await fetch(`rate.php?name=${encodeURIComponent(folderName)}`);
+                const j = await r.json();
+                return j.ret ? j.value : 0;
+            } catch (e) { return 0; }
+        }
+
+        async function setRating(folderName, value) {
+            try {
+                const r = await fetch('rate.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: folderName, value })
+                });
+                return (await r.json()).ret;
+            } catch (e) { return false; }
+        }
+
+        // ============================================================
+        // BOOKMARKS
+        // ============================================================
+        let allBookmarks = {}, allVrBookmarks = {}, bookmarksLoaded = false;
+        async function loadAllBookmarks() {
+            if (bookmarksLoaded) return;
+            try {
+                const [n, v] = await Promise.all([
+                    fetch('bookmark.php?all=1', { cache: 'no-store' }),
+                    fetch('bookmark.php?all=1&mode=vr', { cache: 'no-store' })
+                ]);
+                if (n.ok) { const j = await n.json(); allBookmarks = j.data || {}; }
+                if (v.ok) { const j = await v.json(); allVrBookmarks = j.data || {}; }
+                bookmarksLoaded = true;
+            } catch (e) { console.error('bookmark load failed', e); }
+        }
+        function getBookmarksForVideo(path) {
+            const all = [...(allBookmarks[path] || []), ...(allVrBookmarks[path] || [])];
+            return all.length > 0 ? all : null;
+        }
+        function pickBookmarkTime(path, dur) {
+            const bms = getBookmarksForVideo(path);
+            if (bms && bms.length > 0) {
+                const b = bms[Math.floor(Math.random() * bms.length)];
+                return Math.min(b.time, dur || b.time);
+            }
+            return null;
+        }
+
+        // ============================================================
+        // VR DETECTION
+        // ============================================================
+        let vid180Cache = {};
+        function isVRByFilename(fname) {
+            const n = fname.toLowerCase();
+            if (n.includes('vr') || n.includes('180')) return true;
+            if (n.includes('panorama') || n.includes('pano')) return true;
+            if (n.endsWith('.360') || n.endsWith('.insv') || n.endsWith('.insp') || n.endsWith('.thumb')) return true;
+            if (/(^|[^a-z0-9])360([^a-z0-9]|$)/.test(n)) return true;
+            return false;
+        }
+        async function isVRVideo(vidpath, fname) {
+            if (vid180Cache[vidpath] !== undefined) return vid180Cache[vidpath];
+            try {
+                const r = await fetch(`vrprobe.php?x[]=${vidpath}`, { cache: 'no-store' });
+                if (r.ok) {
+                    const arr = await r.json();
+                    const item = Array.isArray(arr) ? arr[0] : null;
+                    if (item && typeof item.isVR === 'boolean') { vid180Cache[vidpath] = item.isVR; return item.isVR; }
+                }
+            } catch (e) { console.error('vrprobe failed', e); }
+            vid180Cache[vidpath] = isVRByFilename(fname);
+            return vid180Cache[vidpath];
+        }
+
+        // ============================================================
+        // SINGLE FRAME MODE
+        // ============================================================
+        let singleFrameMode = localStorage.getItem('singleFrameMode') === 'true';
+        function toggleSingleFrameMode() {
+            singleFrameMode = !singleFrameMode;
+            localStorage.setItem('singleFrameMode', singleFrameMode);
+            showToast(`싱글프레임: ${singleFrameMode ? 'ON' : 'OFF'}`);
+        }
+
+        // ============================================================
+        // TOAST
+        // ============================================================
+        let toastTimer = null;
+        function showToast(msg) {
+            const el = document.getElementById('action-toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 1200);
+        }
+
+        // ============================================================
+        // DOM REFS
+        // ============================================================
+        const gridEl = document.getElementById('grid');
+        const emptyState = document.getElementById('emptyState');
+        const emptyTitle = document.getElementById('emptyTitle');
+        const headerSearchInput = document.getElementById('headerSearchInput');
+        const typing_panel = document.getElementById('typing_panel');
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        let dirlist = [];
+        let dirFlagMap = {};
+        let makeitemStore = {};
+
+        // ============================================================
+        // THUMBNAIL MANAGER
+        // ============================================================
+        let isPageFocused = !document.hidden;
+        let activeVideoLoads = 0;
+        const MAX_CONCURRENT_LOADS = 8;
+        let videoLoadQueue = [];
+
+        const thumbMgr = {
+            active: new Map(),
+            errors: new Map(),
+
+            setupProgress(card, fname) {
+                const bar = card.querySelector('.vid-progress-bar');
+                if (bar && storeOf(fname)) storeOf(fname).progressBar = bar;
+            },
+
+            showError(fname, el) {
+                if (this.errors.has(fname) || !el || !el.parentElement) return;
+                const d = document.createElement('div');
+                d.className = 'thumbnail-error-icon';
+                d.textContent = '⚠';
+                el.parentElement.appendChild(d);
+                this.errors.set(fname, d);
+            },
+
+            hideError(fname) {
+                const e = this.errors.get(fname);
+                if (e) { e.remove(); this.errors.delete(fname); }
+            },
+
+            start(fname, el) {
+                if (this.active.has(fname) || !isPageFocused || document.hidden || !el.isConnected) return;
+                const data = storeOf(fname);
+                if (singleFrameMode && data && data.hasThumb && !data.needVideoLoad) return;
+                this.active.set(fname, true);
+                this.tick(fname, el);
+            },
+
+            stop(fname) {
+                this.active.delete(fname);
+                this.hideError(fname);
+            },
+
+            tick(fname, el) {
+                if (!isPageFocused || document.hidden || !this.active.has(fname) || !el.isConnected) {
+                    this.stop(fname); return;
+                }
+                const data = storeOf(fname);
+                if (!data || !data.videoPath) { this.stop(fname); return; }
+
+                const dur = data.videoDuration || 30;
+                let seekTime;
+                const bm = pickBookmarkTime(data.videoPath, dur);
+                if (bm) { seekTime = bm; data.currentSeekTime = bm; }
+                else {
+                    data.currentSeekTime = ((data.currentSeekTime || 0) + 10) % dur;
+                    if (data.currentSeekTime < 30) data.currentSeekTime = 30;
+                    seekTime = data.currentSeekTime;
+                }
+
+                if (data.progressBar) data.progressBar.style.width = `${(seekTime / dur) * 100}%`;
+
+                const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(data.videoPath)}&time=${seekTime}`;
+                const curEl = el, curFname = fname, curData = data;
+
+                fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
+                    .then(r => { if (r.ok) return r.blob(); throw new Error('miss'); })
+                    .then(blob => {
+                        if (!curEl.isConnected) return;
+                        curEl.src = URL.createObjectURL(blob);
+                        this.hideError(curFname);
+                        if (!singleFrameMode && isPageFocused && this.active.has(curFname)) this.tick(curFname, curEl);
+                    })
+                    .catch(() => {
+                        fetch(`${getFfmpegUrl()}/decode`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ videoPath: curData.videoPath, seekTime })
+                        })
+                        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+                        .then(res => {
+                            if (!res.success || !res.base64 || res.base64.length <= 100) return;
+                            if (!curEl.isConnected) return;
+                            curEl.src = res.base64;
+                            curData.hasThumb = true;
+                            this.hideError(curFname);
+
+                            const bms = getBookmarksForVideo(curData.videoPath);
+                            if (bms) {
+                                fetch('bookmark_thumb.php?cache=1', {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ path: curData.videoPath, time: seekTime, base64: res.base64 })
+                                }).catch(() => {});
+                            }
+
+                            if (!singleFrameMode && isPageFocused && this.active.has(curFname)) this.tick(curFname, curEl);
+                        })
+                        .catch(ex => { console.error(`thumb update error ${curFname}`, ex); this.showError(curFname, curEl); });
+                    });
+            },
+
+            stopAll() {
+                this.active.clear();
+                this.errors.forEach(e => e.remove());
+                this.errors.clear();
+                thumbObserver.disconnect();
+            },
+            resumeAll() {
+                gridEl.querySelectorAll('img[data-fname]').forEach(img => {
+                    const f = img.dataset.fname;
+                    if (!this.active.has(f)) {
+                        const d = storeOf(f);
+                        if (singleFrameMode && d && d.hasThumb && !d.needVideoLoad) return;
+                        this.start(f, img);
+                    }
+                });
+            }
+        };
+
+        const thumbObserver = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                const f = entry.target.dataset.fname;
+                if (!f) return;
+                if (entry.isIntersecting) thumbMgr.start(f, entry.target);
+                else thumbMgr.stop(f);
+            });
+        }, { threshold: 0.1 });
+
+        const domRemovalObs = new MutationObserver(mutations => {
+            mutations.forEach(m => {
+                m.removedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        const imgs = node.matches?.('img[data-fname]') ? [node] : Array.from(node.querySelectorAll?.('img[data-fname]') || []);
+                        imgs.forEach(img => thumbMgr.stop(img.dataset.fname));
+                    }
+                });
+            });
+        });
+        domRemovalObs.observe(document.body, { childList: true, subtree: true });
+
+        window.addEventListener('focus', () => { isPageFocused = true; thumbMgr.resumeAll(); });
+        window.addEventListener('blur', () => { isPageFocused = false; thumbMgr.stopAll(); });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) { isPageFocused = false; thumbMgr.stopAll(); }
+            else { isPageFocused = true; thumbMgr.resumeAll(); }
+        });
+
+        // ============================================================
+        // VIDEO LOAD QUEUE
+        // ============================================================
+        function storeOf(fname) { return makeitemStore[fname]; }
+
+        async function processVideoLoadQueue() {
+            while (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
+                const info = videoLoadQueue.shift();
+                activeVideoLoads++;
+
+                const vid = info.element;
+                if (!vid || !vid.parentElement) { activeVideoLoads--; continue; }
+
+                let progContainer = vid.parentElement.querySelector(`.vid-progress[data-vidname="${CSS.escape(info.name)}"]`);
+                if (!progContainer) {
+                    progContainer = document.createElement('div');
+                    progContainer.className = 'vid-progress';
+                    progContainer.dataset.vidname = info.name;
+                    const bar = document.createElement('div');
+                    bar.className = 'vid-progress-bar';
+                    bar.dataset.vidname = info.name;
+                    progContainer.appendChild(bar);
+                    vid.parentElement.insertBefore(progContainer, vid);
+                }
+
+                const videoPath = info.cacheKey || vid.src;
+                const fallbackDur = 60;
+                let videoDur = vid.duration;
+                if (!videoDur || !Number.isFinite(videoDur)) {
+                    await new Promise(res => vid.addEventListener('loadedmetadata', res, { once: true }));
+                    videoDur = vid.duration || fallbackDur;
+                }
+
+                let seekTime;
+                const bm = pickBookmarkTime(videoPath, videoDur);
+                if (bm) { seekTime = bm; }
+                else { seekTime = Math.random() * videoDur; if (seekTime < 30) seekTime = 30; }
+
+                const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(videoPath)}&time=${seekTime}`;
+                fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
+                    .then(r => { if (r.ok) return r.blob(); throw new Error('miss'); })
+                    .then(blob => {
+                        applyThumbnail(info, vid, URL.createObjectURL(blob), videoDur, seekTime, fallbackDur);
+                    })
+                    .catch(() => {
+                        decodeAndApply(info, vid, videoPath, seekTime, videoDur, fallbackDur);
+                    });
+            }
+        }
+
+        function applyThumbnail(info, vid, imgSrc, dur, seekTime, fallbackDur) {
+            const data = storeOf(info.fname);
+            if (data) {
+                data.needVideoLoad = false;
+                data.hasThumb = true;
+                data.imgpath = imgSrc;
+                data.videoPath = info.cacheKey || vid.src;
+                data.videoDuration = dur;
+                data.currentSeekTime = parseFloat(seekTime);
+            }
+
+            if (vid.parentElement) {
+                vid.pause();
+                vid.removeAttribute('src');
+                vid.load();
+
+                const img = document.createElement('img');
+                img.src = imgSrc;
+                img.style.cssText = 'position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;';
+                img.alt = 'Video thumbnail';
+                img.dataset.fname = info.fname;
+                if (data && data.isVR) img.classList.add('vr-half');
+                img.draggable = false;
+
+                const bar = vid.parentElement.querySelector(`.vid-progress-bar[data-vidname="${CSS.escape(info.name)}"]`);
+                if (bar) bar.style.width = `${(parseFloat(seekTime) / dur) * 100}%`;
+
+                vid.parentElement.insertBefore(img, vid);
+                vid.remove();
+
+                if (data) data.progressBar = bar;
+                thumbObserver.observe(img);
+            }
+        }
+
+        function decodeAndApply(info, vid, videoPath, seekTime, dur, fallbackDur) {
+            fetch(`${getFfmpegUrl()}/decode`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoPath, seekTime })
+            })
+            .then(r => { if (!r.ok) throw new Error(`FFmpeg ${r.status}`); return r.json(); })
+            .then(res => {
+                if (!res.success || !res.base64 || res.base64.length < 100) return;
+                applyThumbnail(info, vid, res.base64, dur, seekTime, fallbackDur);
+                const bms = getBookmarksForVideo(videoPath);
+                if (bms) {
+                    fetch('bookmark_thumb.php?cache=1', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: videoPath, time: parseFloat(seekTime), base64: res.base64 })
+                    }).catch(() => {});
+                }
+            })
+            .catch(ex => {
+                console.error(`decode error ${info.fname}`, ex);
+                if (vid && vid.parentElement) thumbMgr.showError(info.fname, vid);
+            })
+            .finally(() => { activeVideoLoads--; processVideoLoadQueue(); });
+        }
+
+        // ============================================================
+        // MAKE CARD HTML
+        // ============================================================
+        async function makeCard(fname, text) {
+            let itemEnterable = false, itemImg = false, imgpath = '';
+            let itemVid = false, needVideoLoad = false, vidpath = '';
+            let hasMp4 = false, hasVR = false, hasHighImageRatio = false;
+
+            const cached = makeitemStore[fname];
+            if (cached) {
+                return cached;
+            }
+
+            const belowPath = `${parampath}/${fname}`;
+            let cacheKey = '';
+
+            try {
+                let jsonData = null;
+                if (dirFlagMap[fname] !== false) {
+                    jsonData = await dirseek(belowPath);
+                }
+                if (jsonData && jsonData.ret) {
+                    itemEnterable = true;
+                    let dirImgs = [], imageCount = 0;
+                    jsonData.data.forEach(e => {
+                        const ext = e.d.substring(e.d.lastIndexOf('.') + 1).toLowerCase();
+                        if (isImageExt(ext)) { dirImgs.push(e.d); imageCount++; }
+                        if (ext === 'mp4' || ext === 'mov' || ext === 'mkv') hasMp4 = true;
+                        if (isVRByFilename(e.d)) hasVR = true;
+                    });
+                    const total = jsonData.data.length;
+                    hasHighImageRatio = (total > 0 ? (imageCount / total) : 0) >= 0.9;
+                    if (dirImgs.length > 0) {
+                        itemImg = true;
+                        imgpath = belowPath + '/' + encodeURIComponent(dirImgs[Math.floor(Math.random() * dirImgs.length)]);
+                    }
+                } else {
+                    const ext = fname.substring(fname.lastIndexOf('.') + 1).toLowerCase();
+                    if (isImageExt(ext)) {
+                        itemImg = true;
+                        imgpath = parampath + '/' + encodeURIComponent(fname);
+                    } else if (ext === 'mp4' || ext === 'mov' || ext === 'mkv') {
+                        itemVid = true;
+                        vidpath = parampath + '/' + encodeURIComponent(fname);
+                        needVideoLoad = true;
+                    }
+                }
+            } catch (ex) { console.error(ex); }
+
+            let isVR = false;
+            if (itemVid) {
+                isVR = makeitemStore[fname]?.isVR;
+                if (typeof isVR !== 'boolean') {
+                    isVR = await isVRVideo(vidpath, fname);
+                }
+            }
+
+            const ratingVal = await getRating(fname);
+
+            const entry = {
+                fname, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
+                cacheKey, hasMp4, hasHighImageRatio, hasVR, isVR, rating: ratingVal,
+                hasThumb: false, progressBar: null, currentSeekTime: 0, videoDuration: null
+            };
+            makeitemStore[fname] = entry;
+            return entry;
+        }
+
+        function renderCard(item) {
+            const { fname, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
+                    hasMp4, hasVR, isVR, hasHighImageRatio, rating } = item;
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            const inner = document.createElement('div');
+            inner.className = 'card-inner';
+
+            // Links
+            let linksHtml = '';
+            if (itemVid) {
+                const viewerPath = isVR ? getVRViewerPath() : 'videoview.html';
+                linksHtml += `<a href="${BASE_DIR}${viewerPath}?p=${encodeUriSafe(vidpath)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a>`;
+            } else if (itemEnterable) {
+                const belowpath = `${parampath}/${fname}`;
+                const belowEncoded = belowpath.split('/').map(encodeURIComponent).join('/');
+                if (hasHighImageRatio) {
+                    linksHtml += `<a href="${BASE_DIR}imageview.html?p=${belowEncoded}" target="_blank"></a>`;
+                } else {
+                    let link = `${BASE_DIR}?p=${belowEncoded}`;
+                    if (paramfind != null) link += `&f=${encodeURIComponent(paramfind)}`;
+                    linksHtml += `<a href="${link}"></a>`;
+                }
+            }
+
+            // Badges
+            let badgesHtml = '<div class="card-badges">';
+            if (hasMp4) {
+                badgesHtml += `<div class="cbadge cbadge-playvid">playvid<a href="${BASE_DIR}videoview.html?p=${encodeUriSafe(`${parampath}/${fname}`)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a></div>`;
+            }
+            if (hasVR) {
+                badgesHtml += `<div class="cbadge cbadge-playvid180">playvid180<a href="${BASE_DIR}${getVRViewerPath()}?p=${encodeUriSafe(`${parampath}/${fname}`)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a></div>`;
+            }
+            badgesHtml += '</div>';
+
+            // Rating
+            const ratingHtml = `
+                <div class="card-rating" data-rating-fname="${escapeHtml(fname)}">
+                    <div class="cr-btn" data-rating-action="up" data-rating-fname="${escapeHtml(fname)}">▲</div>
+                    <div class="cr-val">${rating ?? 0}</div>
+                    <div class="cr-btn" data-rating-action="down" data-rating-fname="${escapeHtml(fname)}">▼</div>
+                </div>`;
+
+            // Title
+            const titleHtml = `<div class="card-title-layer"><h3>${escapeHtml(fname)}</h3></div>`;
+
+            // Image or Video
+            let mediaHtml = '';
+            const cacheKeyForAttr = parampath + "/" + fname;
+            if (itemImg) {
+                mediaHtml = `<img src="${escapeHtml(imgpath)}" loading="lazy" alt="Cover" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
+            }
+            if (needVideoLoad) {
+                const vrClass = isVR ? ' vr-half' : '';
+                mediaHtml = `<img src="${escapeHtml(imgpath)}" loading="lazy" alt="Cover" class="${vrClass}" data-fname="${escapeHtml(fname)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
+                mediaHtml += `<video muted src="${escapeHtml(vidpath)}" preload="metadata" data-fname="${escapeHtml(fname)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" style="position:absolute;width:100%;height:100%;object-fit:cover;"></video>`;
+            }
+
+            inner.innerHTML = linksHtml + badgesHtml + ratingHtml + titleHtml + mediaHtml;
+            card.appendChild(inner);
+
+            // Observe thumbnail img
+            const thumbImg = inner.querySelector('img[data-fname]');
+            if (thumbImg) {
+                thumbObserver.observe(thumbImg);
+                thumbMgr.setupProgress(card, fname);
+            }
+
+            // Video queue
+            const vidEl = inner.querySelector('video');
+            if (vidEl) {
+                const vidName = vidEl.src.substring(vidEl.src.lastIndexOf('/') + 1);
+                videoLoadQueue.push({
+                    name: decodeURI(vidName),
+                    element: vidEl,
+                    fname,
+                    cacheKey: cacheKeyForAttr
+                });
+            }
+
+            return card;
+        }
+
+        // ============================================================
+        // RATING EVENT DELEGATION
+        // ============================================================
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('.cr-btn[data-rating-action]');
+            if (!btn) return;
+            const fname = btn.dataset.ratingFname;
+            if (!fname) return;
+            if (btn.dataset.ratingAction === 'up') onRatingUp(fname);
+            else onRatingDown(fname);
+        });
+
+        async function onRatingUp(fname) {
+            const cur = makeitemStore[fname]?.rating ?? 0;
+            const next = cur + 1;
+            if (await setRating(fname, next)) {
+                if (makeitemStore[fname]) makeitemStore[fname].rating = next;
+                document.querySelectorAll(`[data-rating-fname="${fname}"] .cr-val`).forEach(el => { el.textContent = next; });
+            }
+        }
+
+        async function onRatingDown(fname) {
+            const cur = makeitemStore[fname]?.rating ?? 0;
+            const next = cur - 1;
+            if (await setRating(fname, next)) {
+                if (makeitemStore[fname]) makeitemStore[fname].rating = next;
+                document.querySelectorAll(`[data-rating-fname="${fname}"] .cr-val`).forEach(el => { el.textContent = next; });
+            }
+        }
+
+        // ============================================================
+        // RENDER GRID
+        // ============================================================
+        async function renderGrid() {
+            gridEl.innerHTML = '';
+            emptyState.style.display = 'none';
+            thumbMgr.stopAll();
+            videoLoadQueue = [];
+
+            if (dirlist.length === 0) {
+                emptyState.style.display = 'block';
+                emptyTitle.textContent = parampathgiven ? `${parampath} 에 파일이 없습니다` : '디렉토리를 지정해주세요';
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            for (const item of dirlist) {
+                const cardData = await makeCard(item.fname, item.text);
+                const card = renderCard(cardData);
+                card.dataset.itemFname = item.fname;
+                fragment.appendChild(card);
+            }
+
+            gridEl.appendChild(fragment);
+            processVideoLoadQueue();
+        }
+
+        // ============================================================
+        // SORT & FILTER
+        // ============================================================
+        let ordertype = 1;
+        let ratingordertoggle = false;
+        const sortMessages = ['', '정렬: 최신순', '정렬: 이름순', '정렬: 데일리 셔플', '정렬: 랜덤'];
+
+        function shuffleWithSeed(arr, seed) {
+            const rng = (function(s) {
+                return function() {
+                    let t = s += 0x6D2B79F5;
+                    t = Math.imul(t ^ (t >>> 15), t | 1);
+                    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+                };
+            })(seed);
+            const r = [...arr];
+            for (let i = r.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [r[i], r[j]] = [r[j], r[i]];
+            }
+            return r;
+        }
+
+        function stringToSeed(s) {
+            let h = 0;
+            for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i);
+            return h >>> 0;
+        }
+
+        function todayStr() {
+            const d = new Date();
+            return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+        }
+
+        let startupprocessing = false;
+        let initialToastShown = false;
+        async function startup() {
+            if (startupprocessing) return;
+            startupprocessing = true;
+            gridEl.innerHTML = '';
+            thumbMgr.stopAll();
+            thumbMgr.errors.clear();
+            makeitemStore = {};
+            vid180Cache = {};
+            videoLoadQueue = [];
+
+            loadAllBookmarks();
+
+            const prefs = getPathPref();
+            ordertype = prefs.order ?? localStorage.getItem('listordertype') ?? 1;
+            ratingordertoggle = prefs.ratingToggle ?? localStorage.getItem('ratingordertoggle') ?? false;
+            if (ratingordertoggle === 'true') ratingordertoggle = true;
+            else if (ratingordertoggle === 'false') ratingordertoggle = false;
+
+            updateSortButtons();
+            updateRatingToggleBtn();
+            updateSingleFrameBtn();
+
+            if (!initialToastShown && parampathgiven) {
+                initialToastShown = true;
+                showToast(sortMessages[ordertype] || '정렬: 최신순');
+            }
+
+            const json = await dirseek(parampath);
+            if (!json.ret) {
+                emptyState.style.display = 'block';
+                emptyTitle.textContent = `${parampath} dirseek 오류`;
+                return;
+            }
+
+            let list = json.data;
+            dirFlagMap = {};
+            dirlist = [];
+
+            list.forEach(e => {
+                const name = e.d;
+                const time = Date.parse(e.t);
+                dirFlagMap[name] = (e.dir === true);
+
+                let ftext = name;
+                try {
+                    let p1 = ftext.indexOf('/');
+                    if (p1 >= 0) { ftext = ftext.substring(p1 + 1); p1 = ftext.indexOf('/'); ftext = ftext.substring(0, p1); }
+                } catch (ex) { ftext = ''; }
+
+                dirlist.push({ fname: name, text: ftext, time });
+            });
+
+            if (paramfind != null) {
+                dirlist = dirlist.filter(x => x.fname.toUpperCase().includes(paramfind.toUpperCase()));
+            }
+
+            if (dirlist.length > 0) {
+                if (ordertype === 1) dirlist.sort((a, b) => b.time - a.time);
+                else if (ordertype === 2) dirlist.sort((a, b) => a.fname.localeCompare(b.fname));
+                else if (ordertype === 3) dirlist = shuffleWithSeed(dirlist, stringToSeed(todayStr()));
+                else if (ordertype === 4) dirlist = shuffleWithSeed(dirlist, Math.random() * 0xFFFFFFFF);
+
+                if (ratingordertoggle) {
+                    const promises = dirlist.map(async item => { item.rating = await getRating(item.fname); });
+                    await Promise.all(promises);
+                    dirlist = shuffleWithSeed(dirlist, Math.random() * 0xFFFFFFFF);
+                    dirlist.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+                }
+
+                dirlist = dirlist.filter(item => {
+                    const t = item.text.toLowerCase();
+                    return !(t.endsWith('.jpg') || t.endsWith('.jpeg') || t.endsWith('.png') || t.endsWith('.sh'))
+                        || t.endsWith('.mp4') || t.endsWith('.mov') || t.endsWith('.mkv');
+                });
+
+                dirlist.sort((a, b) => Number(b.text.endsWith('.mp4') || b.text.endsWith('.mov') || b.text.endsWith('.mkv'))
+                    - Number(a.text.endsWith('.mp4') || a.text.endsWith('.mov') || a.text.endsWith('.mkv')));
+
+                const imgfiles = dirlist.filter(x => isImageExt(x.fname));
+                if (imgfiles.length / dirlist.length > 0.9) {
+                    dirlist.sort((a, b) => {
+                        const numA = extractNum(a.fname);
+                        const numB = extractNum(b.fname);
+                        return numA - numB;
+                    });
+                }
+            }
+
+            renderGrid();
+            startupprocessing = false;
+        }
+
+        function extractNum(str) {
+            const dot = str.lastIndexOf('.');
+            let s = dot === -1 ? str : str.substring(0, dot);
+            if (!isNaN(s)) return Number(s);
+            for (let i = s.length - 1; i >= 0; i--) {
+                if (isNaN(s[i])) return Number(s.substring(i + 1));
+            }
+            return -1;
+        }
+
+        // ============================================================
+        // SORT BUTTONS UI
+        // ============================================================
+        function updateSortButtons() {
+            document.querySelectorAll('[data-sort]').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.sort) === ordertype);
+            });
+        }
+
+        function updateRatingToggleBtn() {
+            document.getElementById('btnRatingToggle').classList.toggle('active', ratingordertoggle);
+        }
+
+        function updateSingleFrameBtn() {
+            document.getElementById('btnSingleFrame').classList.toggle('active', singleFrameMode);
+        }
+
+        function setSortType(type) {
+            if (type >= 1 && type <= 4) {
+                ordertype = type;
+                setPathPref({ order: type });
+                startup();
+            }
+        }
+
+        document.querySelectorAll('[data-sort]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = parseInt(btn.dataset.sort);
+                showToast(sortMessages[type]);
+                setSortType(type);
+            });
+        });
+
+        document.getElementById('btnRatingToggle').addEventListener('click', () => {
+            ratingordertoggle = !ratingordertoggle;
+            setPathPref({ ratingToggle: ratingordertoggle });
+            updateRatingToggleBtn();
+            showToast(`별점 정렬: ${ratingordertoggle ? 'ON' : 'OFF'}`);
+            startup();
+        });
+
+        document.getElementById('btnSingleFrame').addEventListener('click', () => {
+            toggleSingleFrameMode();
+            updateSingleFrameBtn();
+        });
+
+        document.getElementById('btnBookmarks').addEventListener('click', () => {
+            window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
+        });
+
+        document.getElementById('btnHelp').addEventListener('click', () => {
+            document.getElementById('helpModal').classList.toggle('show');
+        });
+
+        // ============================================================
+        // HEADER SEARCH
+        // ============================================================
+        headerSearchInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const q = headerSearchInput.value.trim();
+                if (!q) {
+                    if (paramfind) {
+                        let href = window.location.href;
+                        href = href.substring(0, href.lastIndexOf('&f='));
+                        window.location = href;
+                    }
+                    return;
+                }
+                let href = window.location.href;
+                while (href.lastIndexOf('&f=') !== -1) href = href.substring(0, href.lastIndexOf('&f='));
+                window.open(`${href}&f=${q}`, '_blank');
+            } else if (e.key === 'Escape') {
+                headerSearchInput.value = '';
+                headerSearchInput.blur();
+            }
+        });
+
+        // ============================================================
+        // KEYBOARD SHORTCUTS
+        // ============================================================
+        let typingmode = false, typingmodecmd = false, typinginputstr = '';
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                if (typingmode || typingmodecmd) {
+                    typingmode = false; typingmodecmd = false; typinginputstr = '';
+                    typing_panel.innerText = '';
+                    document.getElementById('search_panel').style.visibility = 'hidden';
+                }
+                document.getElementById('helpModal').classList.remove('show');
+                if (document.activeElement === headerSearchInput) headerSearchInput.blur();
+                return;
+            }
+
+            if (e.target.tagName === 'INPUT') return;
+
+            if (typingmode || typingmodecmd) {
+                if (e.key.length === 1 && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+                    if (e.key.charCodeAt(0) >= 32 && e.key.charCodeAt(0) <= 126) {
+                        typinginputstr += e.key;
+                        typing_panel.innerText = typinginputstr;
+                    }
+                }
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.target === headerSearchInput) return; // handled above
+                if (typingmodecmd) {
+                    document.getElementById('search_panel').style.visibility = 'hidden';
+                    typinginputstr = ''; typing_panel.innerText = ''; typingmodecmd = false;
+                } else if (typingmode) {
+                    if (typinginputstr.length === 0) {
+                        document.getElementById('search_panel').style.visibility = 'hidden';
+                    } else {
+                        let href = window.location.href;
+                        while (href.lastIndexOf('&f=') !== -1) href = href.substring(0, href.lastIndexOf('&f='));
+                        window.open(`${href}&f=${typinginputstr}`, '_blank');
+                        typinginputstr = ''; typing_panel.innerText = '';
+                        document.getElementById('search_panel').style.visibility = 'hidden';
+                    }
+                    typingmode = false;
+                } else {
+                    typingmode = true;
+                    document.getElementById('search_panel').style.visibility = '';
+                    typing_panel.innerText = typinginputstr;
+                }
+            } else if (e.key === '`') {
+                if (!typingmode) {
+                    typingmodecmd = !typingmodecmd;
+                    if (typingmodecmd) {
+                        document.getElementById('search_panel').style.visibility = '';
+                        typing_panel.innerText = typinginputstr;
+                    }
+                }
+            } else if (e.key === '\\') {
+                showToast('강제 새로고침');
+                startup();
+            } else if (!typingmode && !typingmodecmd && e.key === 'b') {
+                showToast('북마크 열기');
+                window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
+            } else if (!typingmode && !typingmodecmd && e.key >= '1' && e.key <= '4') {
+                showToast(sortMessages[Number(e.key)]);
+                setSortType(Number(e.key));
+            } else if (!typingmode && !typingmodecmd && e.key === '0') {
+                ratingordertoggle = !ratingordertoggle;
+                setPathPref({ ratingToggle: ratingordertoggle });
+                updateRatingToggleBtn();
+                showToast(`별점 정렬: ${ratingordertoggle ? 'ON' : 'OFF'}`);
+                startup();
+            } else if (e.key === 's' && !typingmode && !typingmodecmd) {
+                toggleSingleFrameMode();
+                updateSingleFrameBtn();
+            } else if (e.key === 'Backspace') {
+                if (typingmode || typingmodecmd) {
+                    if (typinginputstr.length > 0) {
+                        typinginputstr = typinginputstr.substr(0, typinginputstr.length - 1);
+                        typing_panel.innerText = typinginputstr;
+                    }
+                } else {
+                    let link = window.location.href;
+                    if (link.lastIndexOf('&f=') !== -1) {
+                        window.location = link.substring(0, link.lastIndexOf('&f='));
+                    } else {
+                        let up = link.substring(0, link.lastIndexOf('/'));
+                        if (!up.endsWith('drvs')) window.location = up;
+                    }
+                }
+            } else if (e.key === '?' && !typingmode && !typingmodecmd) {
+                document.getElementById('helpModal').classList.toggle('show');
+            }
+        });
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', startup);
+
+    })();
+    </script>
+</body>
+</html>
