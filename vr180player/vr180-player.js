@@ -619,6 +619,14 @@ function init() {
 		const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
 		const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)]);
 		controller1.add(new THREE.Line(lineGeometry, lineMaterial));
+
+		// 끝점 리티클 (작은 구체)
+		const reticleGeometry = new THREE.SphereGeometry(0.015, 16, 16);
+		const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+		const reticleMesh = new THREE.Mesh(reticleGeometry, reticleMaterial);
+		reticleMesh.position.set(0, 0, -5);
+		controller1.add(reticleMesh);
+
 		scene.add(controller1);
 		raycaster = new THREE.Raycaster();
 		raycaster.near = 0.1; raycaster.far = 5;
