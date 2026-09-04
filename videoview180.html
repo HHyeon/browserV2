@@ -252,19 +252,15 @@
 
         <div id="bookmark-panel"></div>
 
+        <script src="player-common.js"></script>
         <script>
 
-            let FFMPEG_SERVER_URL = '';
-            function getFfmpegUrl() {
-                return FFMPEG_SERVER_URL || `http://192.168.0.101:3002`;
-            }
-            fetch('ffmpeg_config.json', { cache: 'no-store' })
-                .then(res => res.ok ? res.json() : Promise.reject())
-                .then(cfg => {
-                    const v = cfg && cfg.ffmpeg_server_url;
-                    if (typeof v === 'string' && v.trim()) FFMPEG_SERVER_URL = v.trim();
-                })
-                .catch(() => {});
+            const pc = createPlayerCommon({
+                bookmarkMode: 'vr',
+                volumeStep: 0.1,
+                initialVolume: 0.5,
+                showProgressAfterSeek: true,
+            });
 
             const player = document.getElementById("vr180");
 
@@ -274,1366 +270,375 @@
 
             function playVideo() {
                 const playPromise = player.play();
-                if(playPromise && typeof playPromise.catch === 'function') {
+                if (playPromise && typeof playPromise.catch === 'function') {
                     playPromise.catch((error) => console.warn('video play failed', error));
                 }
-            }
-            
-
-            function setCookie(cname, cvalue, exhours) {
-                const d = new Date();
-                d.setTime(d.getTime() + (exhours*60*60*1000));
-                let expires = "expires="+ d.toUTCString();
-                document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
-            }
-
-            function getCookie(cname) {
-                let name = cname + "=";
-                let ca = document.cookie.split(';');
-                for(let i = 0; i < ca.length; i++) {
-                    let c = ca[i];
-                    while (c.charAt(0) == ' ') {
-                        c = c.substring(1);
-                    }
-                    if (c.indexOf(name) == 0) {
-                        return c.substring(name.length, c.length);
-                    }
-                }
-                return "";
-            }
-
-            let video_saturate=1.0;
-            let video_contrast=1.0;
-            let video_brightness=1.0;
-
-            function video_filter_set(){
-                player.style.filter=`saturate(${video_saturate}) contrast(${video_contrast}) brightness(${video_brightness})`;
-            };
-
-            let dirlist = null;
-            let currentfilename;
-            let currentdir;
-
-
-            async function dirseek(param) {
-                try {
-                    const encoded = encodeURIComponent(param);
-                    const res = await fetch(`dirseek.php?x=${encoded}`, { cache: 'no-store' });
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return await res.json(); // { ret: bool, data: [...] }
-                } catch (e) {
-                    console.error('dirseek failed', e);
-                    return { ret: false, data: [] };
-                }
-            };
-
-            player.addEventListener("timeupdate", (event) => {
-                updateProgressPanel();
-                updateActiveBookmark();
-            });
-            
-            const label1 = document.getElementById("label1");
-            let delayedoffTimer = undefined;
-            
-            function setLabelText(msg) {
-                if(delayedoffTimer != undefined) clearTimeout(delayedoffTimer);
-                
-                label1.innerText = msg;
-                label1.style.visibility="visible";
-                
-                delayedoffTimer = setTimeout(() => {
-                    label1.style.visibility="hidden";
-                    delayedoffTimer = undefined;
-                },1000);
-
             }
 
             const smallmove = 1.0;
             const normalmove = 3.0;
             const bigmove = 10.0;
 
-            const urlStr = window.location.href;
-            const url = new URL(urlStr);
-            const urlParams = url.searchParams;
-            
-            let parampath = getCookie('parampath');
-            if(parampath == '')
-            {
-                parampath = urlParams.get('p');
-            }
-            else
-            {
-                setCookie('parampath', '', 0);
-            }
+            const { parampath: _parampath, paramfind: _paramfind, paramtime: _paramtime } = pc.parseUrlParams();
+            let parampath = _parampath;
+            let paramfind = _paramfind;
+            let paramtime = _paramtime;
+
             console.log(`parampath: ${parampath}`);
-            
-            document.title = parampath.substring(parampath.lastIndexOf('/')+1);
-
-            let paramfind = getCookie('paramfind');
-            if(paramfind == '')
-            {
-                paramfind = urlParams.get('f');
-            }
-            else
-            {
-                setCookie('paramfind', '', 0);
-            }
             console.log(`paramfind: ${paramfind}`);
-
-            // 🔑 북마크 갤러리에서 넘어온 재생 위치 (초)
-            let paramtime = urlParams.get('t');
-            if(paramtime != null) paramtime = parseFloat(paramtime);
-            if(paramtime != null && !Number.isFinite(paramtime)) paramtime = null;
             console.log(`paramtime: ${paramtime}`);
 
-            let player_paused_state = false;
-            function pauseplay() {
-                if(player_paused_state) {
-                    player_paused_state = false;
-                    playVideo();
-                    setLabelText("play");
-                }
-                else {
-                    player_paused_state = true;
-                    player.pause();
-                    setLabelText("pause");
-                }
-                showProgressPanel();
-            }
+            document.title = parampath ? parampath.substring(parampath.lastIndexOf('/') + 1) : 'VR Player';
 
-            function volumncontrol(updown)
-            {
-                const unit = 0.1;
-                let volumnset = player.volume;
-                if(updown) {
-                    if(volumnset + unit > 1.0)
-                        volumnset = 1.0;
-                    else
-                        volumnset += unit;
-                }
-                else {
-                    if(volumnset - unit < 0)
-                        volumnset = 0;
-                    else
-                        volumnset -= unit;
-                }
-
-                player.volume = volumnset;
-                
-                setLabelText(`volumn: ${parseInt(player.volume*100)}%`);
-            }
-
-            function numberpadseeking(num) {
-                if(num >= 0 && num <= 9)
-                {
-                    player.currentTime = (player.duration / 10) * num;
-                    const progress = (player.currentTime / player.duration * 100).toFixed(2);
-                    setLabelText(`(${progress}%)`);
-                }
-                else
-                {
-                    console.log("numberpadseeking - not a number");
-                }
-            }
-
-            // let video_cover_horizontal_moving = 10;
-
-            // let rotation_deg=0;
-
-            // function player_setvertical()
-            // {
-            // }
-
+            let dirlist = null;
+            let currentfilename;
+            let currentdir;
             let setplaytime = false;
             let shuffled = false;
             let shuffleidx = 0;
-            // let videozoomfactor = 1.00;
-            // let videozoomposY = 0;
 
-            // window.addEventListener("wheel", function(e) {
-            //     if(e.deltaY > 0)
-            //     {
-            //         if(!e.shiftKey)
-            //         {
-            //             if(videozoomfactor > 1.0)
-            //             {
-            //                 videozoomfactor -= 0.2;
-            //             }
+            pc.init({
+                label1: document.getElementById("label1"),
+                progressPanel: document.getElementById('progress-panel'),
+                progressBar: document.getElementById('progress-bar'),
+                progressCurrent: document.getElementById('progress-current'),
+                progressTotal: document.getElementById('progress-total'),
+                progressBarContainer: document.getElementById('progress-bar-container'),
+                progressLink: document.getElementById('progress-link'),
+                bookmarkPanel: document.getElementById('bookmark-panel'),
+            });
 
-            //             videozoomfactor = Math.round(videozoomfactor * 10) / 10;
+            player.addEventListener("timeupdate", () => {
+                pc.updateProgressPanel();
+                pc.updateActiveBookmark();
+            });
 
-            //             setLabelText(`zoom:  ${videozoomfactor}`);
-            //         }
-            //         else
-            //         {
-            //             if(videozoomfactor > 1.0) videozoomposY -= 100;
-            //         }
-                    
-            //         if(videozoomfactor == 1.0) videozoomposY = 0;
-
-            //         player.style.transform = `translate(0px,${videozoomposY}px) scale(${videozoomfactor})`;
-
-            //     }
-            //     else
-            //     {
-            //         if(!e.shiftKey)
-            //         {
-            //             if(videozoomfactor < 3.0)
-            //             {
-            //                 videozoomfactor += 0.2;
-            //             }
-            //             else
-            //             {
-            //                 videozoomposY = 0;
-            //             }
-            //             videozoomfactor = Math.round(videozoomfactor * 10) / 10;
-
-            //             setLabelText(`zoom:  ${videozoomfactor}`);
-            //         }
-            //         else
-            //         {
-            //             if(videozoomfactor > 1.0) videozoomposY += 100;
-            //         }
-
-            //         if(videozoomfactor == 1.0) videozoomposY = 0;
-
-            //         player.style.transform = `translate(0px,${videozoomposY}px) scale(${videozoomfactor})`;
-
-            //     }
-            // });
-
-            let muteState = false;
-            let mutevolumestore = 0.00;
-            
-
-            let skip_pause = false;
-                        
             window.addEventListener('focus', () => {
-                
-
-                if(skip_pause)
-                {
-                    setLabelText("skip play");
-                    return;
-                }
-        
+                if (pc.skip_pause) { pc.setLabelText("skip play"); return; }
                 const canvas = getPlayerCanvas();
-                if(canvas && canvas.style.visibility == '')
-                {
-                    player_paused_state = false;
+                if (canvas && canvas.style.visibility == '') {
+                    pc.player_paused_state = false;
                     playVideo();
-                    setLabelText("play");
+                    pc.setLabelText("play");
                 }
-                else
-                {
-
-                }
-
             });
 
             window.addEventListener('blur', () => {
-
-                if(skip_pause)
-                {
-                    setLabelText("skip pause");
-                    return;
-                }
-
+                if (pc.skip_pause) { pc.setLabelText("skip pause"); return; }
                 const canvas = getPlayerCanvas();
-                if(!canvas) return;
-                
-                if(canvas.style.visibility == '')
-                {
-                    player_paused_state = true;
+                if (!canvas) return;
+                if (canvas.style.visibility == '') {
+                    pc.player_paused_state = true;
                     player.pause();
-                    setLabelText("pause");
+                    pc.setLabelText("pause");
                 }
-                else
-                {
-
-                }
-                
             });
 
             window.addEventListener("keydown", onKeydown);
-            
-            async function onKeydown(param)
-            {
+
+            async function onKeydown(param) {
                 console.log(param.key);
 
                 const handledKeys = ['/', 'Backspace', '\\', ']', 'PageDown', '[', 'PageUp',
                     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ' ', 'Enter', 'f',
                     'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z', 's'];
-                if(handledKeys.includes(param.key)) param.preventDefault();
+                if (handledKeys.includes(param.key)) param.preventDefault();
 
-                switch(param.key){
-
+                switch (param.key) {
                     case '/':
+                        pc.skip_pause = !pc.skip_pause;
+                        pc.setLabelText(pc.skip_pause ? "skip blur pause" : "skip blur pause disabled");
+                        break;
 
-                        skip_pause = !skip_pause;
-                        if(skip_pause) setLabelText(`skip blur pause`);
-                        else setLabelText(`skip blur pause disabled`);
-
-                    break;
-
-                    case 'Backspace':
-                        
+                    case 'Backspace': {
                         const canvas = getPlayerCanvas();
-                        if(canvas && canvas.style.visibility == '')
-                        {                            
-                            player_paused_state = true;
+                        if (canvas && canvas.style.visibility == '') {
+                            pc.player_paused_state = true;
                             player.pause();
-                            setLabelText("pause");
-
-                            canvas.style.visibility='hidden';
-                            
-                            if (document.exitFullscreen)
-                                document.exitFullscreen();
-                        }
-                        else
-                        {
-                            player_paused_state = false;
+                            pc.setLabelText("pause");
+                            canvas.style.visibility = 'hidden';
+                            if (document.exitFullscreen) document.exitFullscreen();
+                        } else {
+                            pc.player_paused_state = false;
                             playVideo();
-                            setLabelText("play");
-                            
-                            if(canvas) canvas.style.visibility='';
+                            pc.setLabelText("play");
+                            if (canvas) canvas.style.visibility = '';
                         }
-                    break;
-                    
+                        break;
+                    }
+
                     case 'm':
-                        muteState = !muteState;
-                        if(muteState)
-                        {
-                            mutevolumestore = player.volume;
+                        pc.muteState = !pc.muteState;
+                        if (pc.muteState) {
+                            pc.mutevolumestore = player.volume;
                             player.volume = 0.00;
-                            setLabelText("Muted");
+                            pc.setLabelText("Muted");
+                        } else {
+                            player.volume = pc.mutevolumestore;
+                            pc.setLabelText(`volumn: ${parseInt(player.volume * 100)}%`);
                         }
-                        else
-                        {
-                            player.volume = mutevolumestore;
-                            
-                            setLabelText(`volumn: ${parseInt(player.volume*100)}%`);
-                        }
-                    break;
+                        break;
 
                     case 's':
                         if (typeof window.toggleStereoMode === 'function') {
                             window.toggleStereoMode();
-                            setLabelText(window.isStereoMode ? "stereo: on" : "stereo: off");
+                            pc.setLabelText(window.isStereoMode ? "stereo: on" : "stereo: off");
                         }
-                    break;
-
-                    // case 'r':
-                        
-                    // console.log(`rotation_deg - ${rotation_deg}`);
-
-                    // rotation_deg += 90;
-                    // rotation_deg %= 360;
-
-                    // if(rotation_deg == 90 || rotation_deg == 270)
-                    // {
-                    //     const ratio = player.videoWidth / player.videoHeight;
-                    //     player.style.transform = `scale(${ratio}, ${ratio}) rotate(${rotation_deg}deg)`;
-                    // }
-                    // else
-                    // {
-                    //     player.style.transform = `scale(1, 1) rotate(${rotation_deg}deg)`;
-                    //     player.style.objectFit='contain';
-                    // }
-                    
-                    // break;
-                    
-
-                    case '\\':
-                        {
-                            if(dirlist.length > 1)
-                            {
-                                if(!shuffled)
-                                {
-                                    shuffleidx = 0;
-                                    dirlist.sort(() => Math.random() - 0.5);
-                                    shuffled = true;
-                                }
-
-                                currentfilename = dirlist[shuffleidx]['d'];
-                                shuffleidx++;
-                                if(shuffleidx >= dirlist.length) shuffleidx = 0;
-
-                                const nextvidpath = currentdir + '/' + currentfilename;
-                                player.src = nextvidpath; 
-                                playVideo();
-
-                                await loadBookmarksFor(nextvidpath);
-
-                                if(bookmarks.length > 0) {
-                                    const bm = bookmarks[Math.floor(Math.random() * bookmarks.length)];
-                                    setplaytime = false;
-                                    player.addEventListener('playing', () => {
-                                        if(player.duration) {
-                                            player.currentTime = Math.min(bm.time, player.duration - 0.5);
-                                        } else {
-                                            player.addEventListener('loadedmetadata', () => {
-                                                player.currentTime = Math.min(bm.time, player.duration - 0.5);
-                                            }, { once: true });
-                                        }
-                                        updateProgressPanel();
-                                        setLabelText(`bookmark - ${bm.name} (${formatTime(bm.time)})`);
-                                    }, { once: true });
-                                } else {
-                                    setplaytime = true;
-                                }
-
-                                console.log(`next video - ${nextvidpath}`);
-                                setLabelText(`${currentfilename}`);
-                            }
-                        }
-                    break;
-
-
-                    case ']':
-                    case 'PageDown':
-                        {
-                            let currentfileidx = dirlist.findIndex((a)=> {return a['d']==currentfilename});
-
-                            if(currentfileidx != -1)
-                            {
-                                currentfileidx++;
-                                
-                                if(currentfileidx >= dirlist.length) currentfileidx = 0;
-                                const nextvidpath = currentdir + '/' + dirlist[currentfileidx]['d'];
-                                currentfilename = dirlist[currentfileidx]['d'];
-
-                                player.src = nextvidpath; 
-                                playVideo();
-                                loadBookmarksFor(nextvidpath);
-                                console.log(`next video - ${nextvidpath}`);
-
-                                setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
-                            }
-                        }
-                    break;
-
-                    case '[':
-                    case 'PageUp':
-                        {
-                            let currentfileidx = dirlist.findIndex((a)=> {return a['d']==currentfilename});
-
-                            if(currentfileidx != -1)
-                            {
-                                currentfileidx--;
-                                
-                                if(currentfileidx < 0) currentfileidx = dirlist.length-1;
-                                const nextvidpath = currentdir + '/' + dirlist[currentfileidx]['d'];
-                                currentfilename = dirlist[currentfileidx]['d'];
-
-                                player.src = nextvidpath; 
-                                playVideo();
-                                loadBookmarksFor(nextvidpath);
-                                console.log(`prev video - ${nextvidpath}`);
-
-                                setLabelText(`Index ${currentfileidx+1}/${dirlist.length} - ${currentfilename}`);
-                            }
-                        }
-                    break;
-
-
-                    // case '(':
-                    //     if(video_cover_horizontal_moving > 0) video_cover_horizontal_moving--;
-                    //     setLabelText(`${video_cover_horizontal_moving*5}%`);
-                    //     player.style.objectPosition=`${video_cover_horizontal_moving*5}% 50%`
-                    //     break;
-                    // case ')':
-                    //     if(video_cover_horizontal_moving <= 19) video_cover_horizontal_moving++;
-                    //     setLabelText(`${video_cover_horizontal_moving*5}%`);
-                    //     player.style.objectPosition=`${video_cover_horizontal_moving*5}% 50%`
-                    //     break;
-
-
-                    case '0': 
-                    case '1': 
-                    case '2': 
-                    case '3': 
-                    case '4': 
-                    case '5': 
-                    case '6': 
-                    case '7': 
-                    case '8': 
-                    case '9': 
-                        numberpadseeking(Number(param.key));
-                    break;
-
-                    case '.':
-                        // if(player.style.objectFit == 'contain')
-                        // {
-                        //     setLabelText("Fit To Window");
-                        //     player.style.objectFit='cover';
-                        // }
-                        // else
-                        // {
-                        //     setLabelText("Fit To Video");
-                        //     player.style.objectFit='contain';
-                        // }
-                            
                         break;
+
+                    case '\\': {
+                        if (dirlist.length > 1) {
+                            if (!shuffled) { shuffleidx = 0; dirlist.sort(() => Math.random() - 0.5); shuffled = true; }
+                            currentfilename = dirlist[shuffleidx]['d'];
+                            shuffleidx++;
+                            if (shuffleidx >= dirlist.length) shuffleidx = 0;
+                            const nextvidpath = currentdir + '/' + currentfilename;
+                            player.src = nextvidpath;
+                            playVideo();
+                            await pc.loadBookmarksFor(nextvidpath);
+                            if (pc.bookmarks.length > 0) {
+                                const bm = pc.bookmarks[Math.floor(Math.random() * pc.bookmarks.length)];
+                                setplaytime = false;
+                                player.addEventListener('playing', () => {
+                                    if (player.duration) { player.currentTime = Math.min(bm.time, player.duration - 0.5); }
+                                    else { player.addEventListener('loadedmetadata', () => { player.currentTime = Math.min(bm.time, player.duration - 0.5); }, { once: true }); }
+                                    pc.updateProgressPanel();
+                                    pc.setLabelText(`bookmark - ${bm.name} (${pc.formatTime(bm.time)})`);
+                                }, { once: true });
+                            } else { setplaytime = true; }
+                            pc.setLabelText(`${currentfilename}`);
+                        }
+                        break;
+                    }
+
+                    case ']': case 'PageDown': {
+                        let idx = dirlist.findIndex(a => a['d'] == currentfilename);
+                        if (idx != -1) {
+                            idx++;
+                            if (idx >= dirlist.length) idx = 0;
+                            const nextvidpath = currentdir + '/' + dirlist[idx]['d'];
+                            currentfilename = dirlist[idx]['d'];
+                            player.src = nextvidpath;
+                            playVideo();
+                            pc.loadBookmarksFor(nextvidpath);
+                            pc.setLabelText(`Index ${idx + 1}/${dirlist.length} - ${currentfilename}`);
+                        }
+                        break;
+                    }
+
+                    case '[': case 'PageUp': {
+                        let idx = dirlist.findIndex(a => a['d'] == currentfilename);
+                        if (idx != -1) {
+                            idx--;
+                            if (idx < 0) idx = dirlist.length - 1;
+                            const nextvidpath = currentdir + '/' + dirlist[idx]['d'];
+                            currentfilename = dirlist[idx]['d'];
+                            player.src = nextvidpath;
+                            playVideo();
+                            pc.loadBookmarksFor(nextvidpath);
+                            pc.setLabelText(`Index ${idx + 1}/${dirlist.length} - ${currentfilename}`);
+                        }
+                        break;
+                    }
+
+                    case '0': case '1': case '2': case '3': case '4':
+                    case '5': case '6': case '7': case '8': case '9':
+                        pc.numberpadseeking(Number(param.key));
+                        break;
+
+                    case '.': break;
+
                     case ' ':
-                        pauseplay();
+                        pc.pauseplay(playVideo);
                         break;
-                    case 'Enter':
-                    case 'f':
-                        {
-                            if (!document.fullscreenElement) {
-                                document.documentElement.requestFullscreen()
-                            } else {
-                                if (document.exitFullscreen)
-                                    document.exitFullscreen()
-                            }
+
+                    case 'Enter': case 'f':
+                        if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); }
+                        else { if (document.exitFullscreen) document.exitFullscreen(); }
+                        break;
+
+                    case "ArrowUp": pc.volumncontrol(true); break;
+                    case "ArrowDown": pc.volumncontrol(false); break;
+
+                    case "ArrowRight": {
+                        let moveunit = param.shiftKey ? normalmove : (param.ctrlKey || param.metaKey ? smallmove : bigmove);
+                        let move = player.currentTime + moveunit;
+                        if (move >= player.duration) move = player.duration - 1.0;
+                        player.currentTime = move;
+                        pc.setLabelText(`+ ${moveunit}s (${(player.currentTime / player.duration * 100).toFixed(2)}%)`);
+                        break;
+                    }
+                    case "ArrowLeft": {
+                        let moveunit = param.shiftKey ? normalmove : (param.ctrlKey || param.metaKey ? smallmove : bigmove);
+                        let move = player.currentTime - moveunit;
+                        if (move < 0) move = 0;
+                        player.currentTime = move;
+                        pc.setLabelText(`- ${moveunit}s (${(player.currentTime / player.duration * 100).toFixed(2)}%)`);
+                        break;
+                    }
+
+                    case ';': case 'x': {
+                        if (!player.duration || !pc.currentVideoPath) break;
+                        const t = player.currentTime;
+                        pc.bookmarkAdd(pc.currentVideoPath, t, pc.formatTime(t));
+                        pc.setLabelText(`bookmark saved - ${pc.formatTime(t)}`);
+                        break;
+                    }
+
+                    case '\'': case 'c': {
+                        if (pc.bookmarks.length == 0) { pc.setLabelText('no bookmarks'); break; }
+                        const ct = player.currentTime;
+                        let next = pc.bookmarks.find(b => b.time > ct + 0.5);
+                        if (next == undefined) next = pc.bookmarks[0];
+                        pc.seekToBookmark(next);
+                        break;
+                    }
+
+                    case 'l': case 'z': {
+                        if (pc.bookmarks.length == 0) { pc.setLabelText('no bookmarks'); break; }
+                        const ct = player.currentTime;
+                        let prev;
+                        for (let i = pc.bookmarks.length - 1; i >= 0; i--) {
+                            if (pc.bookmarks[i].time < ct - 0.5) { prev = pc.bookmarks[i]; break; }
                         }
+                        if (prev == undefined) prev = pc.bookmarks[pc.bookmarks.length - 1];
+                        pc.seekToBookmark(prev);
                         break;
-                    case "ArrowUp":
-                        volumncontrol(true);
-                        break;
-                    case "ArrowDown":
-                        volumncontrol(false);
-                        break;
-                    case "ArrowRight":
-                        {
-                            let move;
-                            let moveunit;
-                            
-                            if(param.shiftKey)
-                                moveunit = normalmove;
-                            else if(param.ctrlKey || param.metaKey)
-                                moveunit = smallmove;
-                            else
-                                moveunit = bigmove;
-
-                            move = player.currentTime + moveunit;
-                            if(move >= player.duration) move = player.duration - 1.0;
-                            player.currentTime = move;
-
-                            const progress = (player.currentTime / player.duration * 100).toFixed(2);
-
-                            setLabelText(`+ ${moveunit}s (${progress}%)`);
-                        }
-                        break;
-                    case "ArrowLeft":
-                        {
-                            let move;
-                            let moveunit;
-                            
-                            if(param.shiftKey)
-                                moveunit = normalmove;
-                            else if(param.ctrlKey || param.metaKey)
-                                moveunit = smallmove;
-                            else
-                                moveunit = bigmove;
-
-                            move = player.currentTime - moveunit;
-                            if(move < 0) move = 0;
-                            player.currentTime = move;   
-
-                            const progress = (player.currentTime / player.duration * 100).toFixed(2);
-                            setLabelText(`- ${moveunit}s (${progress}%)`);
-                        }
-                        break;
-
-                    case ';':
-                    case 'x':
-                        {
-                            if(!player.duration || !currentVideoPath) break;
-                            const t = player.currentTime;
-                            bookmarkAdd(currentVideoPath, t, formatTime(t));
-                            setLabelText(`bookmark saved - ${formatTime(t)}`);
-                        }
-                        break;
-
-                    case '\'':
-                    case 'c':
-                        {
-                            if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
-                            const ct = player.currentTime;
-                            let next = bookmarks.find(b => b.time > ct + 0.5);
-                            if(next == undefined) next = bookmarks[0];
-                            seekToBookmark(next);
-                        }
-                        break;
-
-                    case 'l':
-                    case 'z':
-                        {
-                            if(bookmarks.length == 0) { setLabelText('no bookmarks'); break; }
-                            const ct = player.currentTime;
-                            let prev;
-                            for(let i=bookmarks.length-1;i>=0;i--) {
-                                if(bookmarks[i].time < ct - 0.5) { prev = bookmarks[i]; break; }
-                            }
-                            if(prev == undefined) prev = bookmarks[bookmarks.length-1];
-                            seekToBookmark(prev);
-                        }
-                        break;
-
-
-                    // case 'Z':
-                    // case 'z':
-                    //     {
-                    //         if(param.shiftKey)
-                    //         {
-                    //             if(video_saturate > 1.0) video_saturate -= 0.1;
-                    //         }
-                    //         else
-                    //         {
-                    //             if(video_saturate < 2.0) video_saturate += 0.1;
-                    //         }
-
-                    //         video_saturate = Math.round(video_saturate * 10) / 10;
-
-                    //         setLabelText(`saturate - ${video_saturate}`);
-
-                    //         video_filter_set();
-                    //     }
-                    //     break;
-
-                    // case 'X':
-                    // case 'x':
-                    //     {
-                    //         if(param.shiftKey)
-                    //         {
-                    //             if(video_contrast > 1.0) video_contrast -= 0.1;
-                    //         }
-                    //         else
-                    //         {
-                    //             if(video_contrast < 2.0) video_contrast += 0.1;
-                    //         }
-
-                    //         video_contrast = Math.round(video_contrast * 10) / 10;
-
-                    //         setLabelText(`contrast - ${video_contrast}`);
-
-                    //         video_filter_set();
-                    //     }
-                    //     break;
-
-                    // case 'C':
-                    // case 'c':
-                    //     {
-                    //         if(param.shiftKey)
-                    //         {
-                    //             if(video_brightness > 1.0) video_brightness -= 0.1;
-                    //         }
-                    //         else
-                    //         {
-                    //             if(video_brightness < 2.0) video_brightness += 0.1;
-                    //         }
-
-                    //         video_brightness = Math.round(video_brightness * 10) / 10;
-
-                    //         setLabelText(`brightness - ${video_brightness}`);
-
-                    //         video_filter_set();
-                    //     }
-                    //     break;
-
-                    // case 'V':
-                    // case 'v':
-                    //     {
-                    //         video_brightness = 1.0;
-                    //         video_contrast = 1.0;
-                    //         video_saturate = 1.0;
-
-                    //         setLabelText(`filter reset`);
-
-                    //         video_filter_set();
-                    //     }
-                    //     break;
+                    }
                 }
             }
 
-            // let pastpausedstate = false;
-            let leftmouse_movestarted = false;
-            let leftmousedowned = false;
-            let leftmousedownpos = 0;
-            let leftcancelnextclick = false;
-
-            let rightmouse_movestarted = false;
-            let rightmousedowned = false;
-            let rightmousedownpos = 0;
-            let rightcancelnextclick = false;
-
-            // let videoseekingproceeding = false;
-            // let positionscrollstart;
-            // let positionscrollcurr;
-            // let startvideoposition;
-
+            let leftmouse_movestarted = false, leftmousedowned = false, leftmousedownpos = 0, leftcancelnextclick = false;
+            let rightmouse_movestarted = false, rightmousedowned = false, rightmousedownpos = 0, rightcancelnextclick = false;
             let intervallyspeedinfodisplay = undefined;
-            
+
             document.addEventListener("click", (param) => {
-
-                switch(param.button) {
-                    // case 0:
-                    //     console.log(`rightcancelnextclick - ${leftcancelnextclick}`);
-
-                    //     if(leftcancelnextclick) leftcancelnextclick = false;
-                    //     else pauseplay();
-                    //     break;
-                    // case 1:
-
-                    //     break;
-                    case 2:
-                        if(rightcancelnextclick) rightcancelnextclick = false;
-                        else {
-                            console.log("right click");
-                        }
-                        break;
+                if (param.button === 2) {
+                    if (rightcancelnextclick) rightcancelnextclick = false;
                 }
             });
 
             document.addEventListener("mousedown", (param) => {
-
-                const targetElement = document.elementFromPoint(param.clientX, param.clientY);
-                if(targetElement && (targetElement.id === 'progress-panel' || targetElement.closest('#progress-panel') ||
-                    targetElement.id === 'bookmark-panel' || targetElement.closest('#bookmark-panel'))) {
-                    return;
+                const target = document.elementFromPoint(param.clientX, param.clientY);
+                if (target && (target.id === 'progress-panel' || target.closest('#progress-panel') ||
+                    target.id === 'bookmark-panel' || target.closest('#bookmark-panel'))) return;
+                if (param.button === 1) {
+                    player.playbackRate = 1.0;
+                    pc.setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
+                } else if (param.button === 2) {
+                    rightmousedowned = true;
+                    rightmouse_movestarted = true;
+                    rightmousedownpos = param.x;
                 }
-
-                switch(param.button) {
-                    // case 0: // left
-                    //     leftmousedowned = true;
-                    //     leftmouse_movestarted = true;
-                    //     leftmousedownpos = param.x;
-                    //     seeking_labelsetting_handler = setInterval(seeking_labelsetting_handler_elapsed, 100);
-                    //     break;
-                    
-                    case 1: // middle
-                        player.playbackRate = 1.0;
-                        setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
-                        break;
-                    
-                    case 2: // right
-                        rightmousedowned = true;
-                        rightmouse_movestarted = true;
-                        rightmousedownpos = param.x
-                        break;
-                }
-                
             });
-            
+
             document.addEventListener("mouseup", (param) => {
-                
-                switch(param.button) {
-                    // case 0: // left
-                    //     {
-                    //         leftmousedowned = false;                        
-                    //         if(!pastpausedstate) player.play();
-                    //         clearInterval(seeking_labelsetting_handler);
-                    //     }
-                    //     break;
-                    
-                    // case 1: // middle
-
-                    //     break;
-                    
-                    case 2: // right
-                        {
-                            rightmousedowned = false;
-                            player.playbackRate = speed_currentpushstarts - speed_currentpush;
-
-                            if(intervallyspeedinfodisplay != undefined)
-                            {
-                                clearInterval(intervallyspeedinfodisplay);
-                                intervallyspeedinfodisplay = undefined;
-                                console.log("intervallyspeedinfodisplay terminated");
-                                
-                                setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
-                            }
-                        }
-                        break;
+                if (param.button === 2) {
+                    rightmousedowned = false;
+                    player.playbackRate = speed_currentpushstarts - speed_currentpush;
+                    if (intervallyspeedinfodisplay != undefined) {
+                        clearInterval(intervallyspeedinfodisplay);
+                        intervallyspeedinfodisplay = undefined;
+                        pc.setLabelText(`playbackrate - ${player.playbackRate.toFixed(2)}`);
+                    }
                 }
-
             });
 
-            // let seeking_labelsetting_handler = null;
-            // function seeking_labelsetting_handler_elapsed() {
-            //     let msg;
-
-            //     if(!player_seeking_available)
-            //     {
-            //         const progress = ((startvideoposition+positionscrollcurr) / player.duration * 100).toFixed(2);
-            //         const sec = parseInt(positionscrollcurr);
-            //         msg = `seeking to ${progress}% (${sec}s)`;
-            //     }
-            //     else
-            //     {
-            //         const progress = (player.currentTime / player.duration * 100).toFixed(2);
-            //         const sec = parseInt(player.currentTime - startvideoposition);
-            //         msg = `moved - ${progress}% (${sec}s)`;
-            //     }
-
-            //     setLabelText(msg);
-            // }
-            
-            // let player_seeking_available = false;
-            // player.addEventListener('seeked', () => {
-            //     if(leftmousedowned) {
-            //         player_seeking();
-            //         player_seeking_available = true;
-            //     }
-            // });
-
-            // function player_seeking() {
-            //     player.currentTime = (startvideoposition+positionscrollcurr);
-            // }
-
-            // const min_seeking_unit = 0.1;
             const scroll_range = 1000;
-
             let speed_currentpushstarts = 1;
             let speed_currentpush = 0;
 
             document.addEventListener("mousemove", (param) => {
-
-                // if(leftmousedowned) {
-                //     console.log("mousemove !");
-                //     leftcancelnextclick = true;
-
-                //     let diff = param.x - leftmousedownpos;
-                //     if(diff > scroll_range) diff = scroll_range;
-                //     diff = parseInt(diff);
-                //     const maxpushduration = 180.0 // second
-                //     let positionscroll = parseInt(diff / scroll_range * maxpushduration);
-
-                //     positionscroll /= min_seeking_unit;
-                //     positionscroll = parseInt(positionscroll);
-                //     positionscroll *= min_seeking_unit;
-                //     positionscroll = parseInt(positionscroll);
-
-                //     if(leftmouse_movestarted)
-                //     {
-                //         leftmouse_movestarted = false;
-
-                //         pastpausedstate = player.paused;
-                //         player.pause();
-                //         positionscrollstart = positionscroll;
-                //         startvideoposition = player.currentTime;
-
-                //         player_seeking_available = true;
-                //     }
-
-                //     positionscrollcurr = positionscroll - positionscrollstart;
-
-                //     if(player_seeking_available) {
-                //         player_seeking();
-                //         player_seeking_available = false;
-                //     }
-
-                // }
-                // else 
-                if(rightmousedowned) {
+                if (rightmousedowned) {
                     rightcancelnextclick = true;
-
                     let diff = rightmousedownpos - param.x;
-                    if(diff > scroll_range) diff = scroll_range;
+                    if (diff > scroll_range) diff = scroll_range;
                     diff = parseInt(diff);
-                    const maxpushamount = 1.0;
-                    
-                    if(rightmouse_movestarted)
-                    {
+                    if (rightmouse_movestarted) {
                         rightmouse_movestarted = false;
                         speed_currentpushstarts = player.playbackRate;
-                        
-                        if(intervallyspeedinfodisplay != undefined)
-                        {
-                            clearInterval(intervallyspeedinfodisplay);
-                            intervallyspeedinfodisplay = undefined;
-                        }
-
-                        console.log("intervallyspeedinfodisplay started");
+                        if (intervallyspeedinfodisplay != undefined) { clearInterval(intervallyspeedinfodisplay); intervallyspeedinfodisplay = undefined; }
                         intervallyspeedinfodisplay = setInterval(() => {
                             player.playbackRate = speed_currentpushstarts - speed_currentpush;
-                            setLabelText(`playbackrate - ${(speed_currentpushstarts - speed_currentpush).toFixed(2)}`);
+                            pc.setLabelText(`playbackrate - ${(speed_currentpushstarts - speed_currentpush).toFixed(2)}`);
                         }, 200);
                     }
-
-                    speed_currentpush = diff / scroll_range * maxpushamount;
-
-                    // console.log(`push - ${speed_currentpushstarts - speed_currentpush}`);
-
-                }
-                else {
-                    if(!(window.getIsDragging && window.getIsDragging())) showProgressPanel();
-                }
-
-            });
-
-
-            // --- Progress Panel ---
-            const progressPanel = document.getElementById('progress-panel');
-            const progressBar = document.getElementById('progress-bar');
-            const progressCurrent = document.getElementById('progress-current');
-            const progressTotal = document.getElementById('progress-total');
-            const progressBarContainer = document.getElementById('progress-bar-container');
-            const progressLink = document.getElementById('progress-link');
-            progressLink.href = window.location.href;
-
-            // 🔑 북마크 기능
-            let bookmarks = [];
-            let currentVideoPath = '';
-            let bookmarkPanelVisible = true;
-            const bookmarkPanel = document.getElementById('bookmark-panel');
-
-            async function bookmarkFetch(path) {
-                try {
-                    const res = await fetch(`bookmark.php?mode=vr&path=${encodeURIComponent(path)}`, { cache: 'no-store' });
-                    const json = await res.json();
-                    return json.ret ? json.bookmarks : [];
-                } catch (e) {
-                    console.error('bookmarkFetch error', e);
-                    return [];
-                }
-            }
-
-            async function bookmarkAdd(path, time, name) {
-                try {
-                    const res = await fetch('bookmark.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'add', path: path, time: time, name: name, mode: 'vr' })
-                    });
-                    const json = await res.json();
-                    if (json.ret && currentVideoPath === path) {
-                        bookmarks = json.bookmarks;
-                        renderBookmarkPanel();
-                    }
-
-                    cacheBookmarkThumb(path, time);
-
-                    return json.ret;
-                } catch (e) {
-                    console.error('bookmarkAdd error', e);
-                    return false;
-                }
-            }
-
-            function cacheBookmarkThumb(videoPath, seekTime) {
-                fetch(`${getFfmpegUrl()}/decode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ videoPath: videoPath, seekTime: seekTime })
-                })
-                .then(response => response.json())
-                .then(result => {
-                    if (result.success && result.base64 && result.base64.length > 100) {
-                        fetch('bookmark_thumb.php?cache=1', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                path: videoPath,
-                                time: seekTime,
-                                base64: result.base64
-                            })
-                        }).catch(() => {});
-                    }
-                })
-                .catch(() => {});
-            }
-
-            async function bookmarkRemove(path, id) {
-                try {
-                    const res = await fetch('bookmark.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'remove', path: path, id: id, mode: 'vr' })
-                    });
-                    const json = await res.json();
-                    if (json.ret && currentVideoPath === path) {
-                        bookmarks = json.bookmarks;
-                        renderBookmarkPanel();
-                    }
-                    return json.ret;
-                } catch (e) {
-                    console.error('bookmarkRemove error', e);
-                    return false;
-                }
-            }
-
-            async function loadBookmarksFor(path) {
-                currentVideoPath = path;
-                const loadedBookmarks = await bookmarkFetch(path);
-                if(currentVideoPath !== path) return;
-                bookmarks = loadedBookmarks;
-                renderBookmarkPanel();
-            }
-
-            function seekToBookmark(bm) {
-                if(!player.duration) return;
-                player.currentTime = Math.min(bm.time, player.duration - 0.5);
-                const progress = (player.currentTime / player.duration * 100).toFixed(2);
-                setLabelText(`bookmark - ${bm.name} (${progress}%)`);
-                updateProgressPanel();
-                showProgressPanel();
-            }
-
-            function renderBookmarkMarkers() {
-                progressBarContainer.querySelectorAll('.bookmark-marker').forEach(el => el.remove());
-                if (!player.duration || bookmarks.length == 0) return;
-                bookmarks.forEach(bm => {
-                    const marker = document.createElement('div');
-                    marker.className = 'bookmark-marker';
-                    const pct = (bm.time / player.duration) * 100;
-                    marker.style.left = pct + '%';
-                    marker.title = `${bm.name} (${formatTime(bm.time)})`;
-                    marker.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        seekToBookmark(bm);
-                    });
-                    progressBarContainer.appendChild(marker);
-                });
-            }
-
-            function renderBookmarkPanel() {
-                bookmarkPanel.innerHTML = '';
-                renderBookmarkMarkers();
-                if (bookmarks.length == 0) {
-                    bookmarkPanel.innerHTML = '<div class="bookmark-empty">no bookmarks</div>';
-                    return;
-                }
-                bookmarks.forEach(bm => {
-                    const row = document.createElement('div');
-                    row.className = 'bookmark-row';
-                    row.title = `${bm.name} @ ${bm.time}s`;
-                    row.dataset.id = bm.id;
-
-                    const timeEl = document.createElement('span');
-                    timeEl.className = 'bookmark-time';
-                    timeEl.textContent = bm.name;
-
-                    const nameEl = document.createElement('span');
-                    nameEl.className = 'bookmark-name';
-                    nameEl.textContent = `${bm.time.toFixed(1)}s`;
-
-                    const delEl = document.createElement('span');
-                    delEl.className = 'bookmark-del';
-                    delEl.textContent = '×';
-                    delEl.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        bookmarkRemove(currentVideoPath, bm.id);
-                    });
-
-                    row.appendChild(timeEl);
-                    row.appendChild(nameEl);
-                    row.appendChild(delEl);
-                    row.addEventListener('click', () => {
-                        seekToBookmark(bm);
-                    });
-
-                    bookmarkPanel.appendChild(row);
-                });
-
-                updateActiveBookmark();
-            }
-
-            function toggleBookmarkPanel(force) {
-                bookmarkPanelVisible = (force !== undefined) ? force : !bookmarkPanelVisible;
-                bookmarkPanel.classList.toggle('hidden', !bookmarkPanelVisible);
-            }
-
-            function updateActiveBookmark() {
-                if(!bookmarks.length || !player.duration) return;
-                const ct = player.currentTime;
-                let nearest = bookmarks[0];
-                let nearestDist = Math.abs(bookmarks[0].time - ct);
-                for(let i = 1; i < bookmarks.length; i++) {
-                    const dist = Math.abs(bookmarks[i].time - ct);
-                    if(dist < nearestDist) {
-                        nearestDist = dist;
-                        nearest = bookmarks[i];
-                    }
-                }
-                bookmarkPanel.querySelectorAll('.bookmark-row').forEach(row => {
-                    row.classList.toggle('active', row.dataset.id === String(nearest.id));
-                });
-            }
-
-            progressLink.addEventListener('contextmenu', (e) => {
-                e.stopPropagation();
-            });
-
-            let progressHideTimer = null;
-            let progressPanelDragging = false;
-            let progressPanelDragStartX = 0;
-            let progressPanelDragStartY = 0;
-            let progressPanelTranslateX = 0;
-            let progressPanelTranslateY = 0;
-
-            function formatTime(seconds) {
-                if(isNaN(seconds) || seconds < 0) return '00:00';
-                const h = Math.floor(seconds / 3600);
-                const m = Math.floor((seconds % 3600) / 60);
-                const s = Math.floor(seconds % 60);
-                if(h > 0) {
-                    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                }
-                return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-            }
-
-            function updateProgressPanel() {
-                if(!player.duration) return;
-                const current = player.currentTime;
-                const total = player.duration;
-                const percent = (current / total) * 100;
-
-                progressBar.style.width = percent + '%';
-                progressCurrent.textContent = formatTime(current);
-                progressTotal.textContent = formatTime(total);
-            }
-
-            function showProgressPanel(keepVisible = false) {
-                if(progressHideTimer) clearTimeout(progressHideTimer);
-                progressPanel.style.opacity = '1';
-                progressPanel.style.visibility = 'visible';
-                const hovering = progressPanel.matches(':hover');
-                if(!keepVisible && !hovering) {
-                    progressHideTimer = setTimeout(() => {
-                        progressPanel.style.opacity = '0';
-                        progressPanel.style.visibility = 'hidden';
-                        progressHideTimer = null;
-                    }, 500);
+                    speed_currentpush = diff / scroll_range * 1.0;
                 } else {
-                    progressHideTimer = null;
-                }
-            }
-
-            function hideProgressPanel() {
-                if(progressHideTimer) clearTimeout(progressHideTimer);
-                progressPanel.style.opacity = '0';
-                progressPanel.style.visibility = 'hidden';
-                progressHideTimer = null;
-            }
-
-            progressBarContainer.addEventListener('click', (e) => {
-                const rect = progressBarContainer.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const percent = clickX / rect.width;
-                if(player.duration) {
-                    player.currentTime = player.duration * percent;
-                    updateProgressPanel();
-                    showProgressPanel();
+                    if (!(window.getIsDragging && window.getIsDragging())) pc.showProgressPanel();
                 }
             });
-
-            document.getElementById('btn-bookmark-prev').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if(bookmarks.length == 0) { setLabelText('no bookmarks'); return; }
-                const ct = player.currentTime;
-                let prev;
-                for(let i=bookmarks.length-1;i>=0;i--) {
-                    if(bookmarks[i].time < ct - 0.5) { prev = bookmarks[i]; break; }
-                }
-                if(prev == undefined) prev = bookmarks[bookmarks.length-1];
-                seekToBookmark(prev);
-                showProgressPanel(true);
-            });
-
-            document.getElementById('btn-bookmark-add').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if(!player.duration || !currentVideoPath) return;
-                const t = player.currentTime;
-                bookmarkAdd(currentVideoPath, t, formatTime(t));
-                setLabelText(`bookmark saved - ${formatTime(t)}`);
-                showProgressPanel(true);
-            });
-
-            document.getElementById('btn-bookmark-next').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if(bookmarks.length == 0) { setLabelText('no bookmarks'); return; }
-                const ct = player.currentTime;
-                let next = bookmarks.find(b => b.time > ct + 0.5);
-                if(next == undefined) next = bookmarks[0];
-                seekToBookmark(next);
-                showProgressPanel(true);
-            });
-
-
-            progressBarContainer.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-            });
-
-            progressPanel.addEventListener('mousedown', (e) => {
-                if (e.target.id === 'progress-bar-container' ||
-                    e.target.id === 'progress-bar' ||
-                    e.target.classList.contains('progress-bookmark-btn') ||
-                    e.target.closest('#progress-bookmark-btns')) {
-                    return;
-                }
-                e.preventDefault();
-                e.stopPropagation();
-                progressPanelDragging = true;
-                progressPanelDragStartX = e.clientX - progressPanelTranslateX;
-                progressPanelDragStartY = e.clientY - progressPanelTranslateY;
-                progressPanel.style.cursor = 'move';
-                showProgressPanel(true);
-            });
-
-            document.addEventListener('mousemove', (e) => {
-                if(progressPanelDragging) {
-                    const newX = e.clientX - progressPanelDragStartX;
-                    const newY = e.clientY - progressPanelDragStartY;
-                    progressPanelTranslateX = newX;
-                    progressPanelTranslateY = newY;
-                    progressPanel.style.transform = `translate(${newX}px, ${newY}px)`;
-                    showProgressPanel(true);
-                }
-            });
-
-            document.addEventListener('mouseup', (e) => {
-                if(progressPanelDragging) {
-                    progressPanelDragging = false;
-                    progressPanel.style.cursor = '';
-                }
-            });
-
-            progressPanel.addEventListener('mouseenter', () => {
-                showProgressPanel(true);
-            });
-
-            progressPanel.addEventListener('mouseleave', () => {
-                if(!progressPanelDragging) showProgressPanel();
-            });
-
 
             async function startup() {
-                
-                if(parampath != null)
-                {
-                    
-                    console.log(`parampath - ${parampath}`);
-                    // determine if parameter is a directory or file
-                    let isDir = !parampath.toLowerCase().endsWith('.mp4');
-                    if(isDir)
-                    {
-                        currentdir = parampath;
-                        if(currentdir.endsWith('/')) currentdir = currentdir.slice(0, -1);
-                    }
-                    else
-                    {
-                        currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
-                        currentfilename = parampath.substr(parampath.lastIndexOf('/')+1);
-                    }
+                if (parampath == null) { console.log(`${parampath} is null`); return; }
 
-                    const jsondata = await dirseek(currentdir);
-                    
-                    if(jsondata["ret"])
-                    {
-                        dirlist = jsondata["data"];
-                        
-                        // remove hidden files
-                        while(true) {  
-                            const find__ = dirlist.find((a) => { return a["d"][0] == '.';});
-                            if(find__ == undefined) break;
-                            const idx = dirlist.lastIndexOf(find__);
-                            dirlist.splice(idx, 1);
-                        }
-
-                        // keep only mp4s
-                        while(true) {  
-                            const find__ = dirlist.find((a) => { return !a["d"].toLowerCase().endsWith(".mp4") });
-                            if(find__ == undefined) break;
-                            const idx = dirlist.lastIndexOf(find__);
-                            dirlist.splice(idx, 1);
-                        }
-                    }
-                    else
-                    {
-                        console.error('failed to load directory list', currentdir);
-                        dirlist = [];
-                    }
-                    
-                    for(let i=0;i<dirlist.length;i++)
-                    {
-                        dirlist[i]["t"] = Date.parse(dirlist[i]["t"]);
-                    }
-                    
-                    dirlist.sort((a,b) => { return b["t"] - a["t"]; });
-
-                    if(paramfind != null)
-                    {
-                        console.log(`filtering by ${paramfind}`);   
-                        dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
-                    }
-
-                    dirlist = dirlist.filter(e => e["d"].toLowerCase().includes('vr'));
-
-                    console.log(dirlist);
-
-                    // if caller passed a directory and it's empty, abort
-                    if(isDir && dirlist.length === 0) {
-                        console.log('no mp4 files in directory');
-                        return;
-                    }
-
-                    // if caller passed a directory, pick a random file now
-                    if(isDir && dirlist.length > 0)
-                    {
-                        const randomitem = dirlist[Math.floor(Math.random() * dirlist.length)];
-                        currentfilename = randomitem['d'];
-                        parampath = currentdir + '/' + currentfilename;
-                        setplaytime = true;
-                        console.log(`random selected - ${currentfilename}`);
-                    }
-
-                    // 🔑 파일로 직접 열 때 북마크 위치(t)로 이동
-                    if(!isDir && paramtime != null) {
-                        setplaytime = true;
-                    }
-
-                    player.src = parampath;
-                    loadBookmarksFor(parampath);
-
-                    player.addEventListener("playing", () => {
-                        if(setplaytime)
-                        {
-                            setplaytime = false;
-                            let seekto;
-                            if(paramtime != null && player.duration) {
-                                seekto = Math.min(paramtime, player.duration - 1);
-                            }
-                            else {
-                                const duration_block = player.duration / 10;
-                                seekto = duration_block + (duration_block * (Math.random()*3.0));
-                            }
-                            player.currentTime = seekto;
-                            console.log(player.currentTime);
-                            
-                            const progress = (player.currentTime / player.duration * 100).toFixed(2);
-                            const sec = parseInt(player.currentTime);
-                            msg = `moved - ${progress}% (${sec}s)`;
-                            setLabelText(msg);
-                            paramtime = null;
-                            
-                        }
-                        updateProgressPanel();
-                    });
-
-                    player.addEventListener("loadedmetadata", () => {
-                        updateProgressPanel();
-                        renderBookmarkMarkers();
-                    });
-
-
-                    video_saturate = 1.0;
-                    video_brightness = 1.0;
-                    video_contrast = 1.0;
-                    video_filter_set();
-
-                    player.volume = 0.5;
-                    
-                    setLabelText(currentfilename);
-                    player.title = currentfilename;
-
+                let isDir = !parampath.toLowerCase().endsWith('.mp4');
+                if (isDir) {
+                    currentdir = parampath;
+                    if (currentdir.endsWith('/')) currentdir = currentdir.slice(0, -1);
+                } else {
+                    currentdir = parampath.substr(0, parampath.lastIndexOf('/'));
+                    currentfilename = parampath.substr(parampath.lastIndexOf('/') + 1);
                 }
-                else
-                {
-                    console.log(`${parampath} is null`);
+
+                const jsondata = await pc.dirseek(currentdir);
+                if (jsondata["ret"]) {
+                    dirlist = jsondata["data"];
+                    while (true) { const f = dirlist.find(a => a["d"][0] == '.'); if (!f) break; dirlist.splice(dirlist.lastIndexOf(f), 1); }
+                    while (true) { const f = dirlist.find(a => !a["d"].toLowerCase().endsWith(".mp4")); if (!f) break; dirlist.splice(dirlist.lastIndexOf(f), 1); }
+                } else {
+                    console.error('failed to load directory list', currentdir);
+                    dirlist = [];
                 }
+
+                for (let i = 0; i < dirlist.length; i++) dirlist[i]["t"] = Date.parse(dirlist[i]["t"]);
+                dirlist.sort((a, b) => b["t"] - a["t"]);
+
+                if (paramfind != null) {
+                    console.log(`filtering by ${paramfind}`);
+                    dirlist = dirlist.filter(e => e["d"].toUpperCase().includes(paramfind.toUpperCase()));
+                }
+
+                dirlist = dirlist.filter(e => e["d"].toLowerCase().includes('vr'));
+                console.log(dirlist);
+
+                if (isDir && dirlist.length === 0) { console.log('no mp4 files in directory'); return; }
+
+                if (isDir && dirlist.length > 0) {
+                    const randomitem = dirlist[Math.floor(Math.random() * dirlist.length)];
+                    currentfilename = randomitem['d'];
+                    parampath = currentdir + '/' + currentfilename;
+                    setplaytime = true;
+                    console.log(`random selected - ${currentfilename}`);
+                }
+
+                if (!isDir && paramtime != null) setplaytime = true;
+
+                player.src = parampath;
+                pc.loadBookmarksFor(parampath);
+
+                player.addEventListener("playing", () => {
+                    if (setplaytime) {
+                        setplaytime = false;
+                        let seekto;
+                        if (paramtime != null && player.duration) { seekto = Math.min(paramtime, player.duration - 1); }
+                        else { const d = player.duration / 10; seekto = d + (d * (Math.random() * 3.0)); }
+                        player.currentTime = seekto;
+                        pc.setLabelText(`moved - ${(player.currentTime / player.duration * 100).toFixed(2)}% (${parseInt(player.currentTime)}s)`);
+                        paramtime = null;
+                    }
+                    pc.updateProgressPanel();
+                });
+
+                player.addEventListener("loadedmetadata", () => {
+                    pc.updateProgressPanel();
+                    pc.renderBookmarkMarkers();
+                });
+
+                pc.video_filter_set();
+                player.volume = pc.config.initialVolume;
+                pc.setLabelText(currentfilename);
+                player.title = currentfilename;
             }
 
             startup();
