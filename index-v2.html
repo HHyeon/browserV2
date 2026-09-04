@@ -16,6 +16,7 @@
             --border: #3a3a3a;
             --shadow: rgba(0,0,0,0.4);
             --card-radius: 8px;
+            --card-min-w: 280px;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -136,7 +137,7 @@
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(var(--card-min-w), 1fr));
             gap: 10px;
         }
 
@@ -454,6 +455,10 @@
             <button class="hbtn" id="btnRatingToggle" title="별점 정렬 (0)">별점</button>
             <button class="hbtn" id="btnSingleFrame" title="싱글프레임 (S)">1F</button>
             <div class="header-sep"></div>
+            <button class="hbtn hbtn-icon" id="btnSizeDown" title="카드 축소 (-)">−</button>
+            <span id="sizeLabel" style="font-size:12px;color:var(--text-secondary);min-width:20px;text-align:center;user-select:none;">M</span>
+            <button class="hbtn hbtn-icon" id="btnSizeUp" title="카드 확대 (+)">+</button>
+            <div class="header-sep"></div>
             <button class="hbtn hbtn-icon" id="btnBookmarks" title="북마크 (B)">★</button>
             <button class="hbtn hbtn-icon" id="btnHelp" title="도움말 (?)">?</button>
         </div>
@@ -479,6 +484,8 @@
             <div class="sc-row"><span>랜덤</span><span class="sc-key">4</span></div>
             <div class="sc-row"><span>별점 정렬 토글</span><span class="sc-key">0</span></div>
             <div class="sc-row"><span>싱글프레임 토글</span><span class="sc-key">S</span></div>
+            <div class="sc-row"><span>카드 확대</span><span class="sc-key">+</span></div>
+            <div class="sc-row"><span>카드 축소</span><span class="sc-key">−</span></div>
             <div class="sc-row"><span>강제 새로고침</span><span class="sc-key">\</span></div>
             <div class="sc-row"><span>북마크 열기</span><span class="sc-key">B</span></div>
             <div class="sc-row"><span>이 도움말</span><span class="sc-key">?</span></div>
@@ -642,6 +649,29 @@
         }
 
         // ============================================================
+        // CARD SIZE
+        // ============================================================
+        const SIZE_LEVELS = [280, 400, 580];
+        const SIZE_NAMES = ['M', 'L', 'XL'];
+        let cardSizeIdx = Number(localStorage.getItem('cardSizeIdx') ?? 0);
+        if (cardSizeIdx < 0 || cardSizeIdx >= SIZE_LEVELS.length) cardSizeIdx = 0;
+        const sizeLabelEl = document.getElementById('sizeLabel');
+        let measuredCardH = 230;
+
+        function applyCardSize() {
+            document.documentElement.style.setProperty('--card-min-w', SIZE_LEVELS[cardSizeIdx] + 'px');
+            sizeLabelEl.textContent = SIZE_NAMES[cardSizeIdx];
+            localStorage.setItem('cardSizeIdx', cardSizeIdx);
+            measuredCardH = 230;
+        }
+        function setCardSize(idx) {
+            cardSizeIdx = Math.max(0, Math.min(SIZE_LEVELS.length - 1, idx));
+            applyCardSize();
+            showToast(`카드 크기: ${SIZE_NAMES[cardSizeIdx]}`);
+        }
+        applyCardSize();
+
+        // ============================================================
         // TOAST
         // ============================================================
         let toastTimer = null;
@@ -668,6 +698,31 @@
         let dirlist = [];
         let dirFlagMap = {};
         let makeitemStore = {};
+
+        // ============================================================
+        // VIRTUAL SCROLL
+        // ============================================================
+        const BUFFER_ROWS = 3;
+        const RENDER_BATCH = 20;
+        let lastScrollRow = -1;
+        let scrollDebounceTimer = null;
+        const SCROLL_DEBOUNCE = 200;
+
+        function getCardHeight() {
+            const first = gridEl.querySelector('.card[data-rendered="1"]');
+            if (first) measuredCardH = first.offsetHeight + 10;
+            return measuredCardH;
+        }
+
+        const cardObserver = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const idx = Number(entry.target.dataset.virtualIdx);
+                if (isNaN(idx)) return;
+                renderCardAt(idx);
+                cardObserver.unobserve(entry.target);
+            });
+        }, { rootMargin: `${3 * 230}px` });
 
         // ============================================================
         // THUMBNAIL MANAGER
@@ -1016,7 +1071,6 @@
                     linksHtml += `<a href="${BASE_DIR}imageview.html?p=${belowEncoded}" target="_blank"></a>`;
                 } else {
                     let link = `${BASE_DIR}?p=${belowEncoded}`;
-                    if (paramfind != null) link += `&f=${encodeURIComponent(paramfind)}`;
                     linksHtml += `<a href="${link}"></a>`;
                 }
             }
@@ -1112,11 +1166,62 @@
         // ============================================================
         // RENDER GRID
         // ============================================================
+        function getColsCount() {
+            const w = gridEl.clientWidth;
+            const minW = SIZE_LEVELS[cardSizeIdx] + 10;
+            return Math.max(1, Math.floor(w / minW));
+        }
+
+        function getVisibleRange() {
+            const cols = getColsCount();
+            const ch = getCardHeight();
+            const scrollTop = window.scrollY;
+            const viewH = window.innerHeight;
+            const startRow = Math.max(0, Math.floor(scrollTop / ch) - BUFFER_ROWS);
+            const endRow = Math.ceil((scrollTop + viewH) / ch) + BUFFER_ROWS;
+            return { startIdx: startRow * cols, endIdx: Math.min(endRow * cols, dirlist.length), cols };
+        }
+
+        async function renderCardAt(idx) {
+            if (idx < 0 || idx >= dirlist.length) return;
+            const placeholder = gridEl.children[idx];
+            if (!placeholder || placeholder.dataset.rendered === '1') return;
+            placeholder.dataset.rendered = '1';
+            const item = dirlist[idx];
+            const cardData = await makeCard(item.fname, item.text);
+            const card = renderCard(cardData);
+            card.dataset.itemFname = item.fname;
+            placeholder.replaceWith(card);
+        }
+
+        function pruneOffscreen() {
+            const { startIdx, endIdx } = getVisibleRange();
+            const pruneStart = Math.max(0, startIdx - BUFFER_ROWS * 4);
+            const pruneEnd = Math.min(dirlist.length, endIdx + BUFFER_ROWS * 4);
+            Array.from(gridEl.children).forEach((el, idx) => {
+                if (idx >= pruneStart && idx < pruneEnd) return;
+                if (el.dataset.rendered !== '1') return;
+                const fname = el.dataset.itemFname;
+                if (fname) {
+                    el.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
+                    thumbMgr.stop(fname);
+                }
+                const ph = document.createElement('div');
+                ph.className = 'card';
+                ph.style.visibility = 'hidden';
+                ph.dataset.virtualIdx = idx;
+                gridEl.replaceChild(ph, el);
+                cardObserver.observe(ph);
+            });
+        }
+
         async function renderGrid() {
             gridEl.innerHTML = '';
             emptyState.style.display = 'none';
             thumbMgr.stopAll();
+            cardObserver.disconnect();
             videoLoadQueue = [];
+            lastScrollRow = -1;
 
             if (dirlist.length === 0) {
                 emptyState.style.display = 'block';
@@ -1124,18 +1229,50 @@
                 return;
             }
 
+            const { startIdx, endIdx } = getVisibleRange();
             const fragment = document.createDocumentFragment();
 
-            for (const item of dirlist) {
-                const cardData = await makeCard(item.fname, item.text);
-                const card = renderCard(cardData);
-                card.dataset.itemFname = item.fname;
-                fragment.appendChild(card);
+            for (let i = 0; i < dirlist.length; i++) {
+                if (i >= startIdx && i < endIdx) {
+                    const item = dirlist[i];
+                    const cardData = await makeCard(item.fname, item.text);
+                    const card = renderCard(cardData);
+                    card.dataset.itemFname = item.fname;
+                    card.dataset.rendered = '1';
+                    fragment.appendChild(card);
+                } else {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'card';
+                    placeholder.dataset.virtualIdx = i;
+                    placeholder.dataset.rendered = '0';
+                    fragment.appendChild(placeholder);
+                }
             }
 
             gridEl.appendChild(fragment);
+
+            gridEl.querySelectorAll('.card[data-rendered="0"]').forEach(el => {
+                cardObserver.observe(el);
+            });
+
             processVideoLoadQueue();
         }
+
+        function onScroll() {
+            if (dirlist.length === 0) return;
+            const ch = getCardHeight();
+            const curRow = Math.floor(window.scrollY / ch);
+            if (curRow !== lastScrollRow) {
+                lastScrollRow = curRow;
+                pruneOffscreen();
+            }
+            if (scrollDebounceTimer) clearTimeout(scrollDebounceTimer);
+            scrollDebounceTimer = setTimeout(() => {
+                scrollDebounceTimer = null;
+            }, SCROLL_DEBOUNCE);
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
 
         // ============================================================
         // SORT & FILTER
@@ -1322,6 +1459,9 @@
             updateSingleFrameBtn();
         });
 
+        document.getElementById('btnSizeDown').addEventListener('click', () => setCardSize(cardSizeIdx - 1));
+        document.getElementById('btnSizeUp').addEventListener('click', () => setCardSize(cardSizeIdx + 1));
+
         document.getElementById('btnBookmarks').addEventListener('click', () => {
             window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
         });
@@ -1430,6 +1570,10 @@
             } else if (e.key === 's' && !typingmode && !typingmodecmd) {
                 toggleSingleFrameMode();
                 updateSingleFrameBtn();
+            } else if (e.key === '+' && !typingmode && !typingmodecmd) {
+                setCardSize(cardSizeIdx + 1);
+            } else if (e.key === '-' && !typingmode && !typingmodecmd) {
+                setCardSize(cardSizeIdx - 1);
             } else if (e.key === 'Backspace') {
                 if (typingmode || typingmodecmd) {
                     if (typinginputstr.length > 0) {
