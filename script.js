@@ -3,7 +3,7 @@
 let FFMPEG_SERVER_URL = '';
 
 function getFfmpegUrl() {
-    return FFMPEG_SERVER_URL || `http://192.168.0.101:3002`;
+    return FFMPEG_SERVER_URL || `http://${location.hostname}:3002`;
 }
 
 fetch('ffmpeg_config.json', { cache: 'no-store' })

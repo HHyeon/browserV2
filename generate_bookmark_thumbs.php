@@ -15,7 +15,7 @@ if (file_exists($configFile)) {
     $cfg = json_decode(file_get_contents($configFile), true);
     if (!empty($cfg['ffmpeg_server_url'])) $ffmpegUrl = rtrim($cfg['ffmpeg_server_url'], '/');
 }
-if (!$ffmpegUrl) $ffmpegUrl = 'http://192.168.0.101:3002';
+if (!$ffmpegUrl) $ffmpegUrl = 'http://' . gethostname() . ':3002';
 
 // ─── Parse CLI args ───
 $numWorkers = 6;
