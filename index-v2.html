@@ -174,7 +174,6 @@
         }
 
         .card img {
-            position: absolute;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -186,6 +185,53 @@
         .card img.vr-half {
             width: 200% !important;
             object-position: center;
+        }
+
+        .card-grid4 {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 2px;
+            background: #111;
+            overflow: hidden;
+        }
+        .card-grid4 > * {
+            position: static;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .card-grid4 img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+        .grid4-empty {
+            background: #222;
+        }
+
+        .card-split2 {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            gap: 2px;
+            background: #111;
+            overflow: hidden;
+        }
+        .card-split2 > img {
+            flex: 1;
+            min-width: 0;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-drag: none;
         }
 
         .card video {
@@ -431,7 +477,7 @@
         ::-webkit-scrollbar-thumb:hover { background: #777; }
     </style>
 </head>
-<body oncontextmenu="return false">
+<body>
 
     <div id="search_panel">
         <h1 id="typing_panel"></h1>
@@ -989,6 +1035,7 @@
             let itemEnterable = false, itemImg = false, imgpath = '';
             let itemVid = false, needVideoLoad = false, vidpath = '';
             let hasMp4 = false, hasVR = false, hasHighImageRatio = false;
+            let dirImgs4 = [];
 
             const cached = makeitemStore[fname];
             if (cached) {
@@ -1016,7 +1063,11 @@
                     hasHighImageRatio = (total > 0 ? (imageCount / total) : 0) >= 0.9;
                     if (dirImgs.length > 0) {
                         itemImg = true;
-                        imgpath = belowPath + '/' + encodeURIComponent(dirImgs[Math.floor(Math.random() * dirImgs.length)]);
+                        // 랜덤 4장 선택 (2x2 사분할용)
+                        const shuffled = dirImgs.slice().sort(() => Math.random() - 0.5);
+                        const pickCount = Math.min(4, shuffled.length);
+                        dirImgs4 = shuffled.slice(0, pickCount).map(n => belowPath + '/' + encodeURIComponent(n));
+                        imgpath = dirImgs4[0];
                     }
                 } else {
                     const ext = fname.substring(fname.lastIndexOf('.') + 1).toLowerCase();
@@ -1044,6 +1095,7 @@
             const entry = {
                 fname, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
                 cacheKey, hasMp4, hasHighImageRatio, hasVR, isVR, rating: ratingVal,
+                dirImgs4,
                 hasThumb: false, progressBar: null, currentSeekTime: 0, videoDuration: null
             };
             makeitemStore[fname] = entry;
@@ -1052,7 +1104,7 @@
 
         function renderCard(item) {
             const { fname, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
-                    hasMp4, hasVR, isVR, hasHighImageRatio, rating } = item;
+                    hasMp4, hasVR, isVR, hasHighImageRatio, rating, dirImgs4 } = item;
 
             const card = document.createElement('div');
             card.className = 'card';
@@ -1099,7 +1151,24 @@
             // Image or Video
             let mediaHtml = '';
             const cacheKeyForAttr = parampath + "/" + fname;
-            if (itemImg) {
+            if (itemImg && itemEnterable && dirImgs4 && dirImgs4.length >= 4) {
+                // 폴더 카드: 2x2 사분할 이미지 (4장 이상)
+                mediaHtml = '<div class="card-grid4">';
+                for (let i = 0; i < 4; i++) {
+                    if (i < dirImgs4.length) {
+                        mediaHtml += `<img src="${escapeHtml(dirImgs4[i])}" loading="lazy" alt="" draggable="false">`;
+                    } else {
+                        mediaHtml += '<div class="grid4-empty"></div>';
+                    }
+                }
+                mediaHtml += '</div>';
+            } else if (itemImg && itemEnterable && dirImgs4 && dirImgs4.length >= 2) {
+                // 폴더 카드: 좌우 2분할 이미지 (2~3장)
+                mediaHtml = '<div class="card-split2">';
+                mediaHtml += `<img src="${escapeHtml(dirImgs4[0])}" loading="lazy" alt="" draggable="false">`;
+                mediaHtml += `<img src="${escapeHtml(dirImgs4[1])}" loading="lazy" alt="" draggable="false">`;
+                mediaHtml += '</div>';
+            } else if (itemImg) {
                 mediaHtml = `<img src="${escapeHtml(imgpath)}" loading="lazy" alt="Cover" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
             }
             if (needVideoLoad) {
@@ -1524,7 +1593,7 @@
 
             if (e.key === 'Enter') {
                 e.preventDefault();
-                if (e.target === headerSearchInput) return; // handled above
+                if (e.target === headerSearchInput) return;
                 if (typingmodecmd) {
                     document.getElementById('search_panel').style.visibility = 'hidden';
                     typinginputstr = ''; typing_panel.innerText = ''; typingmodecmd = false;
@@ -1540,9 +1609,7 @@
                     }
                     typingmode = false;
                 } else {
-                    typingmode = true;
-                    document.getElementById('search_panel').style.visibility = '';
-                    typing_panel.innerText = typinginputstr;
+                    headerSearchInput.focus();
                 }
             } else if (e.key === '`') {
                 if (!typingmode) {
