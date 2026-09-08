@@ -441,27 +441,6 @@
 
         .toast.show { opacity: 1; }
 
-        /* ===== Search Panel (legacy) ===== */
-        #search_panel {
-            z-index: 150;
-            visibility: hidden;
-            position: fixed;
-            background-color: rgba(0,0,0,0.6);
-            left: 0;
-            top: 10%;
-            width: 100%;
-            height: 5%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #typing_panel {
-            text-align: center;
-            font-size: 24px;
-            color: #fff;
-        }
-
         /* ===== Shortcuts Modal ===== */
         .modal-overlay {
             display: none;
@@ -518,10 +497,6 @@
         <div class="loading-spinner"></div>
         <div class="loading-text">불러오는 중...</div>
         <div class="loading-progress" id="loadingProgress"></div>
-    </div>
-
-    <div id="search_panel">
-        <h1 id="typing_panel"></h1>
     </div>
 
     <div class="toast" id="action-toast"></div>
@@ -777,7 +752,6 @@
         const emptyState = document.getElementById('emptyState');
         const emptyTitle = document.getElementById('emptyTitle');
         const headerSearchInput = document.getElementById('headerSearchInput');
-        const typing_panel = document.getElementById('typing_panel');
 
         // ============================================================
         // STATE
@@ -1626,6 +1600,12 @@
         headerSearchInput.addEventListener('keydown', e => {
             if (e.key === 'Enter') {
                 e.preventDefault();
+				
+				if (headerSearchInput.value.length === 0) {
+					headerSearchInput.blur();
+					return;
+				}
+					
                 const q = headerSearchInput.value.trim();
                 if (!q) {
                     if (paramfind) {
@@ -1638,6 +1618,10 @@
                 let href = window.location.href;
                 while (href.lastIndexOf('&f=') !== -1) href = href.substring(0, href.lastIndexOf('&f='));
                 window.open(`${href}&f=${q}`, '_blank');
+				
+				headerSearchInput.value = '';
+                headerSearchInput.blur();
+				
             } else if (e.key === 'Escape') {
                 headerSearchInput.value = '';
                 headerSearchInput.blur();
@@ -1647,15 +1631,9 @@
         // ============================================================
         // KEYBOARD SHORTCUTS
         // ============================================================
-        let typingmode = false, typingmodecmd = false, typinginputstr = '';
 
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
-                if (typingmode || typingmodecmd) {
-                    typingmode = false; typingmodecmd = false; typinginputstr = '';
-                    typing_panel.innerText = '';
-                    document.getElementById('search_panel').style.visibility = 'hidden';
-                }
                 document.getElementById('helpModal').classList.remove('show');
                 if (document.activeElement === headerSearchInput) headerSearchInput.blur();
                 return;
@@ -1663,82 +1641,42 @@
 
             if (e.target.tagName === 'INPUT') return;
 
-            if (typingmode || typingmodecmd) {
-                if (e.key.length === 1 && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-                    if (e.key.charCodeAt(0) >= 32 && e.key.charCodeAt(0) <= 126) {
-                        typinginputstr += e.key;
-                        typing_panel.innerText = typinginputstr;
-                    }
-                }
-            }
-
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (e.target === headerSearchInput) return;
-                if (typingmodecmd) {
-                    document.getElementById('search_panel').style.visibility = 'hidden';
-                    typinginputstr = ''; typing_panel.innerText = ''; typingmodecmd = false;
-                } else if (typingmode) {
-                    if (typinginputstr.length === 0) {
-                        document.getElementById('search_panel').style.visibility = 'hidden';
-                    } else {
-                        let href = window.location.href;
-                        while (href.lastIndexOf('&f=') !== -1) href = href.substring(0, href.lastIndexOf('&f='));
-                        window.open(`${href}&f=${typinginputstr}`, '_blank');
-                        typinginputstr = ''; typing_panel.innerText = '';
-                        document.getElementById('search_panel').style.visibility = 'hidden';
-                    }
-                    typingmode = false;
-                } else {
-                    headerSearchInput.value = '';
-                    headerSearchInput.focus();
-                }
-            } else if (e.key === '`') {
-                if (!typingmode) {
-                    typingmodecmd = !typingmodecmd;
-                    if (typingmodecmd) {
-                        document.getElementById('search_panel').style.visibility = '';
-                        typing_panel.innerText = typinginputstr;
-                    }
-                }
+                headerSearchInput.value = '';
+                headerSearchInput.focus();
             } else if (e.key === '\\') {
                 showToast('강제 새로고침');
                 startup();
-            } else if (!typingmode && !typingmodecmd && e.key === 'b') {
+            } else if (e.key === 'b') {
                 showToast('북마크 열기');
                 window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
-            } else if (!typingmode && !typingmodecmd && e.key >= '1' && e.key <= '4') {
+            } else if (e.key >= '1' && e.key <= '4') {
                 showToast(sortMessages[Number(e.key)]);
                 setSortType(Number(e.key));
-            } else if (!typingmode && !typingmodecmd && e.key === '0') {
+            } else if (e.key === '0') {
                 ratingordertoggle = !ratingordertoggle;
                 setPathPref({ ratingToggle: ratingordertoggle });
                 updateRatingToggleBtn();
                 showToast(`별점 정렬: ${ratingordertoggle ? 'ON' : 'OFF'}`);
                 startup();
-            } else if (e.key === 's' && !typingmode && !typingmodecmd) {
+            } else if (e.key === 's') {
                 toggleSingleFrameMode();
                 updateSingleFrameBtn();
-            } else if (e.key === '+' && !typingmode && !typingmodecmd) {
+            } else if (e.key === '+') {
                 setCardSize(cardSizeIdx + 1);
-            } else if (e.key === '-' && !typingmode && !typingmodecmd) {
+            } else if (e.key === '-') {
                 setCardSize(cardSizeIdx - 1);
             } else if (e.key === 'Backspace') {
-                if (typingmode || typingmodecmd) {
-                    if (typinginputstr.length > 0) {
-                        typinginputstr = typinginputstr.substr(0, typinginputstr.length - 1);
-                        typing_panel.innerText = typinginputstr;
-                    }
+                let link = window.location.href;
+                if (link.lastIndexOf('&f=') !== -1) {
+                    window.location = link.substring(0, link.lastIndexOf('&f='));
                 } else {
-                    let link = window.location.href;
-                    if (link.lastIndexOf('&f=') !== -1) {
-                        window.location = link.substring(0, link.lastIndexOf('&f='));
-                    } else {
-                        let up = link.substring(0, link.lastIndexOf('/'));
-                        if (!up.endsWith('drvs')) window.location = up;
-                    }
+                    let up = link.substring(0, link.lastIndexOf('/'));
+                    if (!up.endsWith('drvs')) window.location = up;
                 }
-            } else if (e.key === '?' && !typingmode && !typingmodecmd) {
+            } else if (e.key === '?') {
                 document.getElementById('helpModal').classList.toggle('show');
             }
         });
