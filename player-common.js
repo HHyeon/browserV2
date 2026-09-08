@@ -200,6 +200,8 @@ function createPlayerCommon(opts) {
     }
 
     function cacheBookmarkThumb(videoPath, seekTime) {
+        const shortName = videoPath.split('/').pop();
+        console.log(`[thumb] ${shortName} FFmpeg 디코딩 시작 seek=${seekTime}`);
         fetch(`${getFfmpegUrl()}/decode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -208,6 +210,7 @@ function createPlayerCommon(opts) {
         .then(r => r.json())
         .then(result => {
             if (result.success && result.base64 && result.base64.length > 100) {
+                console.log(`[thumb] ${shortName} FFmpeg 디코딩 완료`);
                 fetch('bookmark_thumb.php?cache=1', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

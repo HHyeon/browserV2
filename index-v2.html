@@ -877,15 +877,18 @@
                 const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(data.videoPath)}&time=${seekTime}`;
                 const curEl = el, curFname = fname, curData = data;
 
+                console.log(`[thumb] ${fname} 캐시 시도 seek=${seekTime}`);
                 fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
                     .then(r => { if (r.ok) return r.blob(); throw new Error('miss'); })
                     .then(blob => {
                         if (!curEl.isConnected) return;
                         curEl.src = URL.createObjectURL(blob);
+                        console.log(`[thumb] ${curFname} 캐시 이미지 로드 완료`);
                         this.hideError(curFname);
                         if (!singleFrameMode && isPageFocused && this.active.has(curFname)) this.tick(curFname, curEl);
                     })
                     .catch(() => {
+                        console.log(`[thumb] ${curFname} 캐시 미스 - FFmpeg 디코딩 시작 seek=${seekTime}`);
                         fetch(`${getFfmpegUrl()}/decode`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -897,6 +900,7 @@
                             if (!curEl.isConnected) return;
                             curEl.src = res.base64;
                             curData.hasThumb = true;
+                            console.log(`[thumb] ${curFname} FFmpeg 디코딩 완료`);
                             this.hideError(curFname);
 
                             const bms = getBookmarksForVideo(curData.videoPath);
@@ -998,12 +1002,15 @@
                 else { seekTime = Math.random() * videoDur; if (seekTime < 30) seekTime = 30; }
 
                 const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(videoPath)}&time=${seekTime}`;
+                console.log(`[thumb] ${info.fname} 초기 로드 캐시 시도 seek=${seekTime}`);
                 fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
                     .then(r => { if (r.ok) return r.blob(); throw new Error('miss'); })
                     .then(blob => {
+                        console.log(`[thumb] ${info.fname} 초기 로드 캐시 이미지 완료`);
                         applyThumbnail(info, vid, URL.createObjectURL(blob), videoDur, seekTime, fallbackDur);
                     })
                     .catch(() => {
+                        console.log(`[thumb] ${info.fname} 초기 로드 캐시 미스 - FFmpeg 디코딩 시작`);
                         decodeAndApply(info, vid, videoPath, seekTime, videoDur, fallbackDur);
                     });
             }
@@ -1045,6 +1052,7 @@
         }
 
         function decodeAndApply(info, vid, videoPath, seekTime, dur, fallbackDur) {
+            console.log(`[thumb] ${info.fname} FFmpeg 디코딩 시작 seek=${seekTime}`);
             fetch(`${getFfmpegUrl()}/decode`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1054,6 +1062,7 @@
             .then(res => {
                 if (!res.success || !res.base64 || res.base64.length < 100) return;
                 applyThumbnail(info, vid, res.base64, dur, seekTime, fallbackDur);
+                console.log(`[thumb] ${info.fname} FFmpeg 디코딩 완료`);
                 const bms = getBookmarksForVideo(videoPath);
                 if (bms) {
                     fetch('bookmark_thumb.php?cache=1', {

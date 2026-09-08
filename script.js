@@ -616,6 +616,7 @@ const ThumbnailIntervalManager = {
 
         // 🔑 캐시 우선: 북마크 썸네일 캐시 확인
         const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(itemData.videoPath)}&time=${seekTime}`;
+        console.log(`[thumb] ${fname} 캐시 시도 seek=${seekTime}`);
         fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
             .then(response => {
                 if (response.ok) return response.blob();
@@ -624,6 +625,7 @@ const ThumbnailIntervalManager = {
             .then(blob => {
                 if (!currentImgElement.isConnected) return;
                 currentImgElement.src = URL.createObjectURL(blob);
+                console.log(`[thumb] ${currentFname} 캐시 이미지 로드 완료`);
                 this.hideError(currentFname);
                 if (!isPageFocused || document.hidden) return;
                 if (!this.activeItems.has(currentFname)) return;
@@ -633,6 +635,7 @@ const ThumbnailIntervalManager = {
             })
             .catch(() => {
                 // 캐시 미스: FFmpeg 디코딩
+                console.log(`[thumb] ${currentFname} 캐시 미스 - FFmpeg 디코딩 시작 seek=${seekTime}`);
                 fetch(`${getFfmpegUrl()}/decode`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -647,6 +650,7 @@ const ThumbnailIntervalManager = {
                     if (!currentImgElement.isConnected) return;
                     currentImgElement.src = result.base64;
                     itemData.imgpath = result.base64;
+                    console.log(`[thumb] ${currentFname} FFmpeg 디코딩 완료`);
                     this.hideError(currentFname);
 
                     // 🔑 북마크 영상일 경우 캐시 저장
