@@ -304,6 +304,13 @@
 
             const player = document.getElementById("player");
 
+            function playVideo() {
+                const playPromise = player.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch((error) => console.warn('video play failed', error));
+                }
+            }
+
             const zoomBoxview = document.getElementById('viewbox');
             
             function updateViewbox() {
@@ -524,7 +531,7 @@
                 if(player.style.visibility == '')
                 {
                     pc.player_paused_state = false;
-                    player.play();
+                    playVideo();
                     pc.setLabelText("play");
                 }
                 else
@@ -551,6 +558,11 @@
             async function onKeydown(param)
             {
                 console.log(param.key);
+
+                const handledKeys = ['/', 'Backspace', '\\', ']', 'PageDown', '[', 'PageUp',
+                    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ' ', 'Enter', 'f',
+                    'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z'];
+                if (handledKeys.includes(param.key)) param.preventDefault();
 
                 switch(param.key){
 
@@ -614,6 +626,7 @@
 
                                 const nextvidpath = currentdir + '/' + currentfilename;
                                 player.src = nextvidpath; 
+                                playVideo();
                                 
                                 await pc.loadBookmarksFor(nextvidpath);
                                 
@@ -658,6 +671,7 @@
                                 currentfilename = dirlist[currentfileidx]['d'];
 
                                 player.src = nextvidpath; 
+                                playVideo();
                                 pc.loadBookmarksFor(nextvidpath);
                                 console.log(`next video - ${nextvidpath}`);
 
@@ -681,6 +695,7 @@
                                 currentfilename = dirlist[currentfileidx]['d'];
 
                                 player.src = nextvidpath; 
+                                playVideo();
                                 pc.loadBookmarksFor(nextvidpath);
                                 console.log(`prev video - ${nextvidpath}`);
 
@@ -914,7 +929,7 @@
                                     }
                                     else {
                                         pc.player_paused_state = false;
-                                        player.play();
+                                        playVideo();
                                         pc.setLabelText("play");
                                     }
                                     
@@ -1215,6 +1230,7 @@
                     player.volume = 0.2;
                     
                     pc.setLabelText(currentfilename);
+                    player.title = currentfilename;
 
                     window.addEventListener("keydown", onKeydown);
                 }
