@@ -509,10 +509,6 @@
             <input type="text" id="headerSearchInput" placeholder="검색 (Enter) / Backspace: 상위">
         </div>
         <div class="header-actions">
-            <button class="hbtn active" data-sort="1" title="최신순 (1)">최신</button>
-            <button class="hbtn" data-sort="2" title="이름순 (2)">이름</button>
-            <button class="hbtn" data-sort="3" title="데일리 셔플 (3)">셔플</button>
-            <button class="hbtn" data-sort="4" title="랜덤 (4)">랜덤</button>
             <div class="header-sep"></div>
             <button class="hbtn" id="btnRatingToggle" title="별점 정렬 (0)">별점</button>
             <button class="hbtn" id="btnSingleFrame" title="싱글프레임 (S)">1F</button>
@@ -540,10 +536,6 @@
             <div class="sc-row"><span>검색</span><span class="sc-key">Enter</span></div>
             <div class="sc-row"><span>검색 취소</span><span class="sc-key">Escape</span></div>
             <div class="sc-row"><span>상위 디렉토리</span><span class="sc-key">Backspace</span></div>
-            <div class="sc-row"><span>최신순</span><span class="sc-key">1</span></div>
-            <div class="sc-row"><span>이름순</span><span class="sc-key">2</span></div>
-            <div class="sc-row"><span>데일리 셔플</span><span class="sc-key">3</span></div>
-            <div class="sc-row"><span>랜덤</span><span class="sc-key">4</span></div>
             <div class="sc-row"><span>별점 정렬 토글</span><span class="sc-key">0</span></div>
             <div class="sc-row"><span>싱글프레임 토글</span><span class="sc-key">S</span></div>
             <div class="sc-row"><span>카드 확대</span><span class="sc-key">+</span></div>
@@ -931,7 +923,7 @@
         domRemovalObs.observe(document.body, { childList: true, subtree: true });
 
         window.addEventListener('focus', () => { isPageFocused = true; thumbMgr.resumeAll(); });
-        window.addEventListener('blur', () => { isPageFocused = false; thumbMgr.stopAll(); });
+        <!-- window.addEventListener('blur', () => { isPageFocused = false; thumbMgr.stopAll(); }); -->
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) { isPageFocused = false; thumbMgr.stopAll(); }
             else { isPageFocused = true; thumbMgr.resumeAll(); }
@@ -1383,7 +1375,6 @@
         // ============================================================
         let ordertype = 1;
         let ratingordertoggle = false;
-        const sortMessages = ['', '정렬: 최신순', '정렬: 이름순', '정렬: 데일리 셔플', '정렬: 랜덤'];
 
         function shuffleWithSeed(arr, seed) {
             const rng = (function(s) {
@@ -1435,13 +1426,13 @@
             if (ratingordertoggle === 'true') ratingordertoggle = true;
             else if (ratingordertoggle === 'false') ratingordertoggle = false;
 
-            updateSortButtons();
             updateRatingToggleBtn();
             updateSingleFrameBtn();
-
+			
+			console.log(`ordertype - ${ordertype}`);
+			
             if (!initialToastShown && parampathgiven) {
-                initialToastShown = true;
-                showToast(sortMessages[ordertype] || '정렬: 최신순');
+                initialToastShown = true;	
             }
 
             if (loadProg) loadProg.textContent = '디렉토리 조회 중...';
@@ -1537,15 +1528,6 @@
             return -1;
         }
 
-        // ============================================================
-        // SORT BUTTONS UI
-        // ============================================================
-        function updateSortButtons() {
-            document.querySelectorAll('[data-sort]').forEach(btn => {
-                btn.classList.toggle('active', parseInt(btn.dataset.sort) === ordertype);
-            });
-        }
-
         function updateRatingToggleBtn() {
             document.getElementById('btnRatingToggle').classList.toggle('active', ratingordertoggle);
         }
@@ -1553,22 +1535,6 @@
         function updateSingleFrameBtn() {
             document.getElementById('btnSingleFrame').classList.toggle('active', singleFrameMode);
         }
-
-        function setSortType(type) {
-            if (type >= 1 && type <= 4) {
-                ordertype = type;
-                setPathPref({ order: type });
-                startup();
-            }
-        }
-
-        document.querySelectorAll('[data-sort]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const type = parseInt(btn.dataset.sort);
-                showToast(sortMessages[type]);
-                setSortType(type);
-            });
-        });
 
         document.getElementById('btnRatingToggle').addEventListener('click', () => {
             ratingordertoggle = !ratingordertoggle;
@@ -1652,9 +1618,6 @@
             } else if (e.key === 'b') {
                 showToast('북마크 열기');
                 window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
-            } else if (e.key >= '1' && e.key <= '4') {
-                showToast(sortMessages[Number(e.key)]);
-                setSortType(Number(e.key));
             } else if (e.key === '0') {
                 ratingordertoggle = !ratingordertoggle;
                 setPathPref({ ratingToggle: ratingordertoggle });
