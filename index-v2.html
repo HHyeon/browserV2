@@ -509,6 +509,10 @@
             <input type="text" id="headerSearchInput" placeholder="검색 (Enter) / Backspace: 상위">
         </div>
         <div class="header-actions">
+            <button class="hbtn active" data-sort="1" title="최신순">최신</button>
+            <button class="hbtn" data-sort="2" title="이름순">이름</button>
+            <button class="hbtn" data-sort="3" title="데일리 셔플">셔플</button>
+            <button class="hbtn" data-sort="4" title="랜덤">랜덤</button>
             <div class="header-sep"></div>
             <button class="hbtn" id="btnRatingToggle" title="별점 정렬 (0)">별점</button>
             <button class="hbtn" id="btnSingleFrame" title="싱글프레임 (S)">1F</button>
@@ -1426,6 +1430,7 @@
             if (ratingordertoggle === 'true') ratingordertoggle = true;
             else if (ratingordertoggle === 'false') ratingordertoggle = false;
 
+            updateSortButtons();
             updateRatingToggleBtn();
             updateSingleFrameBtn();
 			
@@ -1535,6 +1540,21 @@
         function updateSingleFrameBtn() {
             document.getElementById('btnSingleFrame').classList.toggle('active', singleFrameMode);
         }
+
+        function updateSortButtons() {
+            document.querySelectorAll('[data-sort]').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.sort) === ordertype);
+            });
+        }
+
+        document.querySelectorAll('[data-sort]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                ordertype = parseInt(btn.dataset.sort);
+                setPathPref({ order: ordertype });
+                updateSortButtons();
+                startup();
+            });
+        });
 
         document.getElementById('btnRatingToggle').addEventListener('click', () => {
             ratingordertoggle = !ratingordertoggle;
