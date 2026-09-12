@@ -18,6 +18,7 @@ const CONTROL_PANEL_HIDE_DELAY = 1000; // 3 seconds
 let isXrLoopActive = false;
 let is2DMode = false;
 let isStereoMode = false;
+let videoRotation = 0;
 let renderEyeIndex = 0;
 let vrControlPanel;
 
@@ -372,6 +373,7 @@ function init() {
 		uiElements.push(vr180Mesh);
 
 		vr180Mesh.rotation.y = Math.PI / 2;
+		vr180Mesh.rotation.order = 'ZXY';
 		scene.add(vr180Mesh);
 		vr180Mesh.visible = false;
 
@@ -1879,3 +1881,11 @@ window.toggleStereoMode = function() {
 Object.defineProperty(window, 'isStereoMode', {
 	get: function() { return isStereoMode; }
 });
+
+window.rotateVideo = function(degrees = 90) {
+	videoRotation = (videoRotation === 0) ? 90 : 0;
+	if (vr180Mesh) {
+		vr180Mesh.rotation.z = videoRotation * Math.PI / 180;
+	}
+	return videoRotation;
+};

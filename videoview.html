@@ -768,6 +768,7 @@
                             const progress = (player.currentTime / player.duration * 100).toFixed(2);
 
                             pc.setLabelText(`+ ${moveunit}s (${progress}%)`);
+                            pc.showProgressPanel(true);
                         }
                         break;
                     case "ArrowLeft":
@@ -789,6 +790,7 @@
                             const progress = (player.currentTime / player.duration * 100).toFixed(2);
 
                             pc.setLabelText(`- ${moveunit}s (${progress}%)`);
+                            pc.showProgressPanel(true);
                         }
                         break;
 

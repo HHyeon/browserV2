@@ -341,7 +341,7 @@
 
                 const handledKeys = ['/', 'Backspace', '\\', ']', 'PageDown', '[', 'PageUp',
                     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ' ', 'Enter', 'f',
-                    'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z', 's'];
+                    'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z', 's', 'r'];
                 if (handledKeys.includes(param.key)) param.preventDefault();
 
                 switch (param.key) {
@@ -383,6 +383,13 @@
                         if (typeof window.toggleStereoMode === 'function') {
                             window.toggleStereoMode();
                             pc.setLabelText(window.isStereoMode ? "stereo: on" : "stereo: off");
+                        }
+                        break;
+
+                    case 'r':
+                        if (typeof window.rotateVideo === 'function') {
+                            const deg = window.rotateVideo(90);
+                            pc.setLabelText(`rotation: ${deg}°`);
                         }
                         break;
 
@@ -470,6 +477,7 @@
                         if (move >= player.duration) move = player.duration - 1.0;
                         player.currentTime = move;
                         pc.setLabelText(`+ ${moveunit}s (${(player.currentTime / player.duration * 100).toFixed(2)}%)`);
+                        pc.showProgressPanel(true);
                         break;
                     }
                     case "ArrowLeft": {
@@ -478,6 +486,7 @@
                         if (move < 0) move = 0;
                         player.currentTime = move;
                         pc.setLabelText(`- ${moveunit}s (${(player.currentTime / player.duration * 100).toFixed(2)}%)`);
+                        pc.showProgressPanel(true);
                         break;
                     }
 
