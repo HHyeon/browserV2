@@ -258,7 +258,7 @@
             const pc = createPlayerCommon({
                 bookmarkMode: 'vr',
                 volumeStep: 0.1,
-                initialVolume: 0.5,
+                initialVolume: 0.3,
                 showProgressAfterSeek: true,
             });
 
@@ -389,9 +389,13 @@
                     case '\\': {
                         if (dirlist.length > 1) {
                             if (!shuffled) { shuffleidx = 0; dirlist.sort(() => Math.random() - 0.5); shuffled = true; }
-                            currentfilename = dirlist[shuffleidx]['d'];
-                            shuffleidx++;
-                            if (shuffleidx >= dirlist.length) shuffleidx = 0;
+                            let next;
+                            do {
+                                next = dirlist[shuffleidx]['d'];
+                                shuffleidx++;
+                                if (shuffleidx >= dirlist.length) { shuffleidx = 0; dirlist.sort(() => Math.random() - 0.5); }
+                            } while (next === currentfilename && dirlist.length > 1);
+                            currentfilename = next;
                             const nextvidpath = currentdir + '/' + currentfilename;
                             player.src = nextvidpath;
                             playVideo();

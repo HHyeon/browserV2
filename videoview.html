@@ -287,7 +287,7 @@
 
             const pc = createPlayerCommon({
                 volumeStep: 0.01,
-                initialVolume: 0.2,
+                initialVolume: 0.3,
                 showProgressAfterSeek: false,
             });
 
@@ -620,9 +620,13 @@
                                     shuffled = true;
                                 }
 
-                                currentfilename = dirlist[shuffleidx]['d'];
-                                shuffleidx++;
-                                if(shuffleidx >= dirlist.length) shuffleidx = 0;
+                                let next;
+                                do {
+                                    next = dirlist[shuffleidx]['d'];
+                                    shuffleidx++;
+                                    if(shuffleidx >= dirlist.length) { shuffleidx = 0; dirlist.sort(() => Math.random() - 0.5); }
+                                } while(next === currentfilename && dirlist.length > 1);
+                                currentfilename = next;
 
                                 const nextvidpath = currentdir + '/' + currentfilename;
                                 player.src = nextvidpath; 
@@ -1227,7 +1231,7 @@
 
                     pc.video_filter_set();
 
-                    player.volume = 0.2;
+                    player.volume = 0.3;
                     
                     pc.setLabelText(currentfilename);
                     player.title = currentfilename;
