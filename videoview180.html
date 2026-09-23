@@ -71,20 +71,6 @@
                 pointer-events: none;
             }
 
-            #progress-link {
-                font-size: 1.2vmin;
-                color: rgba(255, 255, 255, 0.7);
-                text-decoration: none;
-                padding: 2px 6px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 3px;
-                pointer-events: auto;
-            }
-
-            #progress-link:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-            }
-
             #progress-top-row {
                 display: flex;
                 justify-content: center;
@@ -243,7 +229,7 @@
                     <span id="progress-separator"> / </span>
                     <span id="progress-total">00:00</span>
                 </div>
-                <a id="progress-link" href="#" target="_blank" rel="noopener noreferrer">Link</a>
+
             </div>
             <div id="progress-bar-container">
                 <div id="progress-bar"></div>
@@ -304,7 +290,6 @@
                 progressCurrent: document.getElementById('progress-current'),
                 progressTotal: document.getElementById('progress-total'),
                 progressBarContainer: document.getElementById('progress-bar-container'),
-                progressLink: document.getElementById('progress-link'),
                 bookmarkPanel: document.getElementById('bookmark-panel'),
             });
 
@@ -628,6 +613,7 @@
                 if (!isDir && paramtime != null) setplaytime = true;
 
                 player.src = parampath;
+                playVideo();
                 pc.loadBookmarksFor(parampath);
 
                 player.addEventListener("playing", () => {

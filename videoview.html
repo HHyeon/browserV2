@@ -99,20 +99,6 @@
                 pointer-events: none;
             }
 
-            #progress-link {
-                font-size: 1.2vmin;
-                color: rgba(255, 255, 255, 0.7);
-                text-decoration: none;
-                padding: 2px 6px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 3px;
-                pointer-events: auto;
-            }
-
-            #progress-link:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-            }
-
             #progress-top-row {
                 display: flex;
                 justify-content: center;
@@ -266,7 +252,7 @@
                     <span id="progress-separator"> / </span>
                     <span id="progress-total">00:00</span>
                 </div>
-                <a id="progress-link" href="#" target="_blank">Link</a>
+
             </div>
             <div id="progress-bar-container">
                 <div id="progress-bar"></div>
@@ -286,10 +272,14 @@
         <script>
 
             const pc = createPlayerCommon({
-                volumeStep: 0.01,
+                volumeStep: 0.1,
                 initialVolume: 0.3,
                 showProgressAfterSeek: false,
             });
+
+            const smallmove = 1.0;
+            const normalmove = 3.0;
+            const bigmove = 10.0;
 
             pc.init({
                 label1: document.getElementById("label1"),
@@ -298,7 +288,6 @@
                 progressCurrent: document.getElementById('progress-current'),
                 progressTotal: document.getElementById('progress-total'),
                 progressBarContainer: document.getElementById('progress-bar-container'),
-                progressLink: document.getElementById('progress-link'),
                 bookmarkPanel: document.getElementById('bookmark-panel'),
             });
 
@@ -561,7 +550,7 @@
 
                 const handledKeys = ['/', 'Backspace', '\\', ']', 'PageDown', '[', 'PageUp',
                     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ' ', 'Enter', 'f',
-                    'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z'];
+                    'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ';', 'x', "'", 'c', 'l', 'z', 's', 'r'];
                 if (handledKeys.includes(param.key)) param.preventDefault();
 
                 switch(param.key){
@@ -728,7 +717,7 @@
 
                         break;
                     case ' ':
-                        pc.pauseplay();
+                        pc.pauseplay(playVideo);
                         break;
                     case 'Enter':
                     case 'f':
@@ -751,17 +740,8 @@
                         break;
                     case "ArrowRight":
                         {
-                            let move;
-                            let moveunit;
-                            
-                            if(param.shiftKey)
-                                moveunit = 3.0;
-                            else if(param.ctrlKey || param.metaKey)
-                                moveunit = 1.0;
-                            else
-                                moveunit = 10.0;
-
-                            move = player.currentTime + moveunit;
+                            let moveunit = param.shiftKey ? normalmove : (param.ctrlKey || param.metaKey ? smallmove : bigmove);
+                            let move = player.currentTime + moveunit;
                             if(move >= player.duration) move = player.duration - 1.0;
                             player.currentTime = move;
 
@@ -773,19 +753,10 @@
                         break;
                     case "ArrowLeft":
                         {
-                            let move;
-                            let moveunit;
-                            
-                            if(param.shiftKey)
-                                moveunit = 3.0;
-                            else if(param.ctrlKey || param.metaKey)
-                                moveunit = 1.0;
-                            else
-                                moveunit = 10.0;
-
-                            move = player.currentTime - moveunit;
+                            let moveunit = param.shiftKey ? normalmove : (param.ctrlKey || param.metaKey ? smallmove : bigmove);
+                            let move = player.currentTime - moveunit;
                             if(move < 0) move = 0;
-                            player.currentTime = move;   
+                            player.currentTime = move;
 
                             const progress = (player.currentTime / player.duration * 100).toFixed(2);
 
@@ -847,10 +818,7 @@
             let mouselongpressedcheckTimer = null;
 
             document.addEventListener('contextmenu', (e) => {
-                const targetElement = document.elementFromPoint(e.clientX, e.clientY);
-                if(!(targetElement && targetElement.id === 'progress-link')) {
-                    e.preventDefault();
-                }
+                e.preventDefault();
             });
 
             function mouseLClickLongPressed() {

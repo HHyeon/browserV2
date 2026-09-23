@@ -32,7 +32,7 @@ function createPlayerCommon(opts) {
 
     // ---- DOM refs (set via init) ----
     let label1, progressPanel, progressBar, progressCurrent, progressTotal;
-    let progressBarContainer, progressLink, bookmarkPanel;
+    let progressBarContainer, bookmarkPanel;
 
     // ---- Config ----
     function getFfmpegUrl() { return FFMPEG_SERVER_URL || `http://${location.hostname}:3002`; }
@@ -343,9 +343,6 @@ function createPlayerCommon(opts) {
 
     // ---- Progress Panel Events ----
     function setupProgressEvents() {
-        progressLink.addEventListener('contextmenu', e => e.stopPropagation());
-        progressLink.href = window.location.href;
-
         progressBarContainer.addEventListener('click', (e) => {
             const rect = progressBarContainer.getBoundingClientRect();
             const percent = (e.clientX - rect.left) / rect.width;
@@ -420,7 +417,6 @@ function createPlayerCommon(opts) {
         progressCurrent = domRefs.progressCurrent;
         progressTotal = domRefs.progressTotal;
         progressBarContainer = domRefs.progressBarContainer;
-        progressLink = domRefs.progressLink;
         bookmarkPanel = domRefs.bookmarkPanel;
         setupProgressEvents();
     }
