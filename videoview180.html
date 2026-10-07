@@ -476,6 +476,7 @@
                     }
 
                     case ';': case 'x': {
+                        if (droppedLocal) { pc.setLabelText('local file - bookmark disabled'); break; }
                         if (!player.duration || !pc.currentVideoPath) break;
                         const t = player.currentTime;
                         pc.bookmarkAdd(pc.currentVideoPath, t, pc.formatTime(t));
@@ -580,6 +581,7 @@
                 }
 
                 const jsondata = await pc.dirseek(currentdir);
+                if (droppedLocal) return;
                 if (jsondata["ret"]) {
                     dirlist = jsondata["data"];
                     while (true) { const f = dirlist.find(a => a["d"][0] == '.'); if (!f) break; dirlist.splice(dirlist.lastIndexOf(f), 1); }
@@ -616,29 +618,69 @@
                 playVideo();
                 pc.loadBookmarksFor(parampath);
 
-                player.addEventListener("playing", () => {
-                    if (setplaytime) {
-                        setplaytime = false;
-                        let seekto;
-                        if (paramtime != null && player.duration) { seekto = Math.min(paramtime, player.duration - 1); }
-                        else { const d = player.duration / 10; seekto = d + (d * (Math.random() * 3.0)); }
-                        player.currentTime = seekto;
-                        pc.setLabelText(`moved - ${(player.currentTime / player.duration * 100).toFixed(2)}% (${parseInt(player.currentTime)}s)`);
-                        paramtime = null;
-                    }
-                    pc.updateProgressPanel();
-                });
-
-                player.addEventListener("loadedmetadata", () => {
-                    pc.updateProgressPanel();
-                    pc.renderBookmarkMarkers();
-                });
-
                 pc.video_filter_set();
                 player.volume = pc.config.initialVolume;
                 pc.setLabelText(currentfilename);
                 player.title = currentfilename;
             }
+
+            player.addEventListener("playing", () => {
+                if (setplaytime) {
+                    setplaytime = false;
+                    let seekto;
+                    if (paramtime != null && player.duration) { seekto = Math.min(paramtime, player.duration - 1); }
+                    else { const d = player.duration / 10; seekto = d + (d * (Math.random() * 3.0)); }
+                    player.currentTime = seekto;
+                    pc.setLabelText(`moved - ${(player.currentTime / player.duration * 100).toFixed(2)}% (${parseInt(player.currentTime)}s)`);
+                    paramtime = null;
+                }
+                pc.updateProgressPanel();
+            });
+
+            player.addEventListener("loadedmetadata", () => {
+                pc.updateProgressPanel();
+                pc.renderBookmarkMarkers();
+            });
+
+            let droppedLocal = false;
+            let droppedObjectUrl = null;
+
+            function playDroppedFile(file) {
+                if (!file) return;
+                if (!file.name.toLowerCase().endsWith('.mp4')) {
+                    pc.setLabelText(`not an mp4 - ${file.name}`);
+                    return;
+                }
+                droppedLocal = true;
+                if (droppedObjectUrl) URL.revokeObjectURL(droppedObjectUrl);
+                droppedObjectUrl = URL.createObjectURL(file);
+
+                parampath = droppedObjectUrl;
+                paramtime = null;
+                setplaytime = false;
+                currentfilename = file.name;
+                currentdir = '';
+                dirlist = [];
+                shuffled = false;
+
+                player.src = droppedObjectUrl;
+                playVideo();
+                pc.loadBookmarksFor(droppedObjectUrl);
+                pc.video_filter_set();
+                pc.setLabelText(currentfilename);
+                document.title = currentfilename;
+                player.title = currentfilename;
+                console.log(`local file dropped - ${file.name}`);
+            }
+
+            window.addEventListener('dragover', (e) => { e.preventDefault(); });
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (!files || files.length === 0) return;
+                const file = Array.from(files).find(f => f.name.toLowerCase().endsWith('.mp4')) || files[0];
+                playDroppedFile(file);
+            });
 
             startup();
 

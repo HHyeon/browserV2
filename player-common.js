@@ -111,15 +111,22 @@ function createPlayerCommon(opts) {
     }
 
     // ---- Playback ----
+    function isStandby() {
+        if (player && player.style && player.style.visibility === 'hidden') return true;
+        const canvas = document.querySelector('canvas');
+        if (canvas && canvas.style.visibility === 'hidden') return true;
+        return false;
+    }
+
     function pauseplay(playFn) {
-        if (player_paused_state) {
+        if (player_paused_state && !isStandby()) {
             player_paused_state = false;
             if (playFn) playFn(); else player.play();
             setLabelText("play");
         } else {
             player_paused_state = true;
             player.pause();
-            setLabelText("pause");
+            setLabelText(isStandby() ? "standby" : "pause");
         }
         showProgressPanel();
     }
