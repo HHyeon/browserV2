@@ -448,9 +448,13 @@
                         pc.pauseplay(playVideo);
                         break;
 
-                    case 'Enter': case 'f':
+                    case 'Enter':
                         if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); }
                         else { if (document.exitFullscreen) document.exitFullscreen(); }
+                        break;
+
+                    case 'f':
+                        pc.toggleFavorite();
                         break;
 
                     case "ArrowUp": pc.volumncontrol(true); break;
@@ -665,6 +669,7 @@
 
                 player.src = droppedObjectUrl;
                 playVideo();
+                if (typeof window.resetViewOrientation === 'function') window.resetViewOrientation();
                 pc.loadBookmarksFor(droppedObjectUrl);
                 pc.video_filter_set();
                 pc.setLabelText(currentfilename);

@@ -1889,3 +1889,12 @@ window.rotateVideo = function(degrees = 90) {
 	}
 	return videoRotation;
 };
+
+window.resetViewOrientation = function() {
+	cameraTarget = { yaw: 0, pitch: 0 };
+	cameraRotation = { yaw: 0, pitch: 0 };
+	cameraVelocity = { yaw: 0, pitch: 0 };
+	if (camera2D) camera2D.rotation.set(0, 0, 0);
+	videoRotation = 0;
+	if (vr180Mesh) vr180Mesh.rotation.z = 0;
+};

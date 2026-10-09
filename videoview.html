@@ -720,7 +720,6 @@
                         pc.pauseplay(playVideo);
                         break;
                     case 'Enter':
-                    case 'f':
                         {
                             if (!document.fullscreenElement) {
                                 document.documentElement.requestFullscreen();
@@ -731,6 +730,9 @@
                                     document.exitFullscreen()
                             }
                         }
+                        break;
+                    case 'f':
+                        pc.toggleFavorite();
                         break;
                     case "ArrowUp":
                         pc.volumncontrol(true);

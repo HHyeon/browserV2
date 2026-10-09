@@ -268,10 +268,96 @@ function createPlayerCommon(opts) {
 
     async function loadBookmarksFor(path) {
         currentVideoPath = path;
+        updateFavoriteIndicator(path);
         const loadedBookmarks = await bookmarkFetch(path);
         if (currentVideoPath !== path) return;
         bookmarks = loadedBookmarks;
         renderBookmarkPanel();
+    }
+
+    // ---- Favorite indicator (플레이어 우상단 반투명 ★) ----
+    let favIndicatorEl = null;
+    function normPath(p) {
+        try { return decodeURI(p); } catch (e) { return p; }
+    }
+    function ensureFavIndicator() {
+        if (favIndicatorEl) return favIndicatorEl;
+        favIndicatorEl = document.createElement('div');
+        favIndicatorEl.id = 'pc-fav-indicator';
+        favIndicatorEl.textContent = '★';
+        favIndicatorEl.style.position = 'fixed';
+        favIndicatorEl.style.top = '10px';
+        favIndicatorEl.style.right = '10px';
+        favIndicatorEl.style.zIndex = '900';
+        favIndicatorEl.style.fontSize = '26px';
+        favIndicatorEl.style.lineHeight = '1';
+        favIndicatorEl.style.pointerEvents = 'none';
+        favIndicatorEl.style.userSelect = 'none';
+        favIndicatorEl.style.transition = 'color 0.15s, opacity 0.15s';
+        favIndicatorEl.style.display = 'none';
+        document.body.appendChild(favIndicatorEl);
+        return favIndicatorEl;
+    }
+    function showFavoriteIndicator(on) {
+        const el = ensureFavIndicator();
+        el.textContent = '★';
+        el.style.color = on ? '#ffc531' : 'rgba(255,255,255,0.35)';
+        el.style.opacity = on ? '0.75' : '0.45';
+        el.style.textShadow = on
+            ? '0 0 8px rgba(255,197,49,0.8), 1px 1px 2px rgba(0,0,0,0.6)'
+            : '1px 1px 2px rgba(0,0,0,0.6)';
+        el.style.display = '';
+    }
+    function hideFavoriteIndicator() {
+        if (favIndicatorEl) favIndicatorEl.style.display = 'none';
+    }
+    async function fetchFavoriteStatus(path) {
+        try {
+            const res = await fetch(`favorite.php?path=${encodeURIComponent(path)}`, { cache: 'no-store' });
+            const json = await res.json();
+            if (!json || json.ret !== true) return null;
+            return !!json.favorited;
+        } catch (e) { return null; }
+    }
+    async function updateFavoriteIndicator(path) {
+        if (!path || path.startsWith('blob:') || path.startsWith('data:')) {
+            hideFavoriteIndicator();
+            return;
+        }
+        const on = await fetchFavoriteStatus(path);
+        if (currentVideoPath !== path) return;
+        if (on === null) { hideFavoriteIndicator(); return; }
+        showFavoriteIndicator(on);
+    }
+
+    // ---- Favorites (즐겨찾기: 파일 자체를 북마크와 별개로 즐겨찾기) ----
+    async function toggleFavorite(path) {
+        const target = path || currentVideoPath;
+        if (!target || target.startsWith('blob:') || target.startsWith('data:')) {
+            hideFavoriteIndicator();
+            setLabelText('local file - favorite disabled');
+            showProgressPanel(true);
+            return null;
+        }
+        try {
+            const res = await fetch('favorite.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'toggle', path: target, dir: false })
+            });
+            const json = await res.json();
+            if (!json || json.ret !== true) throw new Error('toggle rejected');
+            showFavoriteIndicator(!!json.favorited);
+            const name = target.substring(target.lastIndexOf('/') + 1);
+            setLabelText(json.favorited ? `★ favorite added - ${name}` : `☆ favorite removed - ${name}`);
+            showProgressPanel(true);
+            return !!json.favorited;
+        } catch (e) {
+            console.error('favorite toggle error', e);
+            setLabelText('favorite failed');
+            showProgressPanel(true);
+            return null;
+        }
     }
 
     function seekToBookmark(bm) {
@@ -436,6 +522,7 @@ function createPlayerCommon(opts) {
         setLabelText, pauseplay, volumncontrol, numberpadseeking,
         formatTime, updateProgressPanel, showProgressPanel, hideProgressPanel,
         bookmarkFetch, bookmarkAdd, bookmarkRemove, loadBookmarksFor, seekToBookmark,
+        toggleFavorite,
         renderBookmarkMarkers, renderBookmarkPanel, toggleBookmarkPanel, updateActiveBookmark,
         cacheBookmarkThumb,
         init,

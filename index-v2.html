@@ -295,15 +295,22 @@
             line-height: 1.3;
         }
 
-        /* Card Badges */
+        /* Card Badges (favorite star sits adjacent-left of badge column) */
         .card-badges {
             position: absolute;
             top: 6px;
             right: 6px;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            align-items: flex-start;
             gap: 4px;
             z-index: 4;
+        }
+
+        .card-badges-col {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .cbadge {
@@ -368,6 +375,35 @@
             color: #fff;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
             line-height: 1;
+        }
+
+        /* Favorite toggle (video cards only, adjacent-left of badges) */
+        .card-fav {
+            position: relative;
+            flex-shrink: 0;
+            margin-top: 6px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.35);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            cursor: pointer;
+            z-index: 12;
+            user-select: none;
+            transition: color 0.15s, transform 0.1s;
+        }
+
+        .card-fav:hover {
+            color: rgba(255, 255, 255, 0.85);
+            transform: scale(1.15);
+        }
+
+        .card-fav.on {
+            color: #ffc531;
+            text-shadow: 0 0 6px rgba(255,197,49,0.7), 1px 1px 2px rgba(0,0,0,0.7);
         }
 
         /* Video progress bar */
@@ -522,6 +558,7 @@
             <button class="hbtn hbtn-icon" id="btnSizeUp" title="카드 확대 (+)">+</button>
             <div class="header-sep"></div>
             <button class="hbtn hbtn-icon" id="btnBookmarks" title="북마크 (B)">★</button>
+            <button class="hbtn hbtn-icon" id="btnFavorites" title="즐겨찾기 (F)">♥</button>
             <button class="hbtn hbtn-icon" id="btnHelp" title="도움말 (?)">?</button>
         </div>
     </header>
@@ -546,6 +583,7 @@
             <div class="sc-row"><span>카드 축소</span><span class="sc-key">−</span></div>
             <div class="sc-row"><span>강제 새로고침</span><span class="sc-key">\</span></div>
             <div class="sc-row"><span>북마크 열기</span><span class="sc-key">B</span></div>
+                <div class="sc-row"><span>즐겨찾기 세션 (새 탭, 현재 폴더 하위)</span><span class="sc-key">F</span></div>
             <div class="sc-row"><span>이 도움말</span><span class="sc-key">?</span></div>
             <div style="text-align:right;margin-top:12px;">
                 <button class="hbtn" onclick="document.getElementById('helpModal').classList.remove('show')">닫기</button>
@@ -580,6 +618,7 @@
         const urlParams = new URL(window.location.href).searchParams;
         let paramfind = urlParams.get('f');
         let parampath = urlParams.get('p');
+        let favMode = urlParams.get('fav') === '1';
         if (parampath != null) document.title = parampath.substring(parampath.lastIndexOf('/') + 1);
         let parampathgiven = true;
         if (parampath == '.' || parampath == null) { parampathgiven = false; }
@@ -607,6 +646,15 @@
             return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
         }
         function encodeUriSafe(s) { return encodeURI(String(s ?? '')); }
+        function joinPath(base, name) {
+            if (base === '.' || base === '') return name;
+            if (base.endsWith('/')) base = base.slice(0, -1);
+            return base + '/' + name;
+        }
+        function splitPath(full) {
+            const i = full.lastIndexOf('/');
+            return i < 0 ? { base: '.', fname: full } : { base: full.substring(0, i), fname: full.substring(i + 1) };
+        }
         function isImageExt(n) {
             const a = n.toLowerCase();
             return a.endsWith('jpeg') || a.endsWith('jpg') || a.endsWith('png') || a.endsWith('webp') || a.endsWith('gif');
@@ -669,6 +717,56 @@
             }
             return null;
         }
+
+        // ============================================================
+        // FAVORITES (비디오/디렉터리 자체 즐겨찾기 — 시점북마크와 무관)
+        // ============================================================
+        // encodeURI/디코드 혼재 키를 동일 경로로 비교 (favorite.php canon과 동일 규칙)
+        const favNorm = p => { try { return decodeURI(p); } catch (e) { return p; } };
+        let favoritesSet = new Set();
+        async function loadFavorites() {
+            try {
+                const res = await fetch('favorite.php?all=1', { cache: 'no-store' });
+                const json = await res.json();
+                favoritesSet = new Set(Object.keys(json.data || {}).map(favNorm));
+            } catch (e) {
+                console.error('favorites load failed', e);
+                favoritesSet = new Set();
+            }
+        }
+        async function toggleFavorite(fkey) {
+            const fkeyNorm = favNorm(fkey);
+            const wasOn = favoritesSet.has(fkeyNorm);
+            try {
+                const entry = makeitemStore[fkey];
+                const body = { action: wasOn ? 'remove' : 'add', path: fkey };
+                if (entry) body.dir = !!entry.itemEnterable;
+                const res = await fetch('favorite.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const json = await res.json();
+                if (!json.ret) { showToast('즐겨찾기 저장 실패'); return; }
+                if (json.favorited) favoritesSet.add(fkeyNorm); else favoritesSet.delete(fkeyNorm);
+                document.querySelectorAll('.card-fav').forEach(el => {
+                    if (el.dataset.favKey === fkey) el.classList.toggle('on', json.favorited);
+                });
+                const name = fkey.substring(fkey.lastIndexOf('/') + 1);
+                showToast(`${json.favorited ? '★' : '☆'} 즐겨찾기 ${json.favorited ? '추가' : '제거'} - ${name}`);
+                if (!json.favorited && favMode) { startup(); return; }
+            } catch (e) {
+                console.error('favorite toggle failed', e);
+                showToast('즐겨찾기 저장 실패');
+            }
+        }
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('.card-fav');
+            if (!btn || !btn.dataset.favKey) return;
+            e.preventDefault();
+            e.stopPropagation();
+            toggleFavorite(btn.dataset.favKey);
+        });
 
         // ============================================================
         // VR DETECTION
@@ -793,48 +891,48 @@
             active: new Map(),
             errors: new Map(),
 
-            setupProgress(card, fname) {
+            setupProgress(card, fkey) {
                 const bar = card.querySelector('.vid-progress-bar');
-                if (bar && storeOf(fname)) storeOf(fname).progressBar = bar;
+                if (bar && storeOf(fkey)) storeOf(fkey).progressBar = bar;
             },
 
-            showError(fname, el) {
-                if (this.errors.has(fname) || !el || !el.parentElement) return;
+            showError(fkey, el) {
+                if (this.errors.has(fkey) || !el || !el.parentElement) return;
                 const d = document.createElement('div');
                 d.className = 'thumbnail-error-icon';
                 d.textContent = '⚠';
                 el.parentElement.appendChild(d);
-                this.errors.set(fname, d);
+                this.errors.set(fkey, d);
             },
 
-            hideError(fname) {
-                const e = this.errors.get(fname);
-                if (e) { e.remove(); this.errors.delete(fname); }
+            hideError(fkey) {
+                const e = this.errors.get(fkey);
+                if (e) { e.remove(); this.errors.delete(fkey); }
             },
 
-            start(fname, el) {
-                if (this.active.has(fname) || !isPageFocused || document.hidden || !el.isConnected) return;
-                const data = storeOf(fname);
+            start(fkey, el) {
+                if (this.active.has(fkey) || !isPageFocused || document.hidden || !el.isConnected) return;
+                const data = storeOf(fkey);
                 if (singleFrameMode && data && data.hasThumb && !data.needVideoLoad) return;
-                this.active.set(fname, true);
-                this.tick(fname, el);
+                this.active.set(fkey, true);
+                this.tick(fkey, el);
             },
 
-            stop(fname) {
-                this.active.delete(fname);
-                this.hideError(fname);
+            stop(fkey) {
+                this.active.delete(fkey);
+                this.hideError(fkey);
             },
 
-            tick(fname, el) {
-                if (!isPageFocused || document.hidden || !this.active.has(fname) || !el.isConnected) {
-                    this.stop(fname); return;
+            tick(fkey, el) {
+                if (!isPageFocused || document.hidden || !this.active.has(fkey) || !el.isConnected) {
+                    this.stop(fkey); return;
                 }
-                const data = storeOf(fname);
-                if (!data || !data.videoPath) { this.stop(fname); return; }
+                const data = storeOf(fkey);
+                if (!data || !data.videoPath) { this.stop(fkey); return; }
 
                 const dur = data.videoDuration || 30;
                 let seekTime;
-                const bm = pickBookmarkTime(data.videoPath, dur);
+                const bm = pickBookmarkTime(data.videoPath, data.videoDurationKnown ? dur : undefined);
                 if (bm) { seekTime = bm; data.currentSeekTime = bm; }
                 else {
                     data.currentSeekTime = ((data.currentSeekTime || 0) + 10) % dur;
@@ -842,23 +940,23 @@
                     seekTime = data.currentSeekTime;
                 }
 
-                if (data.progressBar) data.progressBar.style.width = `${(seekTime / dur) * 100}%`;
+                if (data.progressBar) data.progressBar.style.width = `${Math.min(100, (seekTime / dur) * 100)}%`;
 
                 const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(data.videoPath)}&time=${seekTime}`;
-                const curEl = el, curFname = fname, curData = data;
+                const curEl = el, curFkey = fkey, curData = data;
 
-                console.log(`[thumb] ${fname} 캐시 시도 seek=${seekTime}`);
+                console.log(`[thumb] ${fkey} 캐시 시도 seek=${seekTime}`);
                 fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
                     .then(r => { if (r.ok) return r.blob(); throw new Error('miss'); })
                     .then(blob => {
                         if (!curEl.isConnected) return;
                         curEl.src = URL.createObjectURL(blob);
-                        console.log(`[thumb] ${curFname} 캐시 이미지 로드 완료`);
-                        this.hideError(curFname);
-                        if (!singleFrameMode && isPageFocused && this.active.has(curFname)) this.tick(curFname, curEl);
+                        console.log(`[thumb] ${curFkey} 캐시 이미지 로드 완료`);
+                        this.hideError(curFkey);
+                        if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) this.tick(curFkey, curEl);
                     })
                     .catch(() => {
-                        console.log(`[thumb] ${curFname} 캐시 미스 - FFmpeg 디코딩 시작 seek=${seekTime}`);
+                        console.log(`[thumb] ${curFkey} 캐시 미스 - FFmpeg 디코딩 시작 seek=${seekTime}`);
                         fetch(`${getFfmpegUrl()}/decode`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -866,24 +964,35 @@
                         })
                         .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
                         .then(res => {
-                            if (!res.success || !res.base64 || res.base64.length <= 100) return;
-                            if (!curEl.isConnected) return;
+                            if (!res.success || !res.base64 || res.base64.length <= 100) return 'skip';
+                            if (!curEl.isConnected) return 'skip';
                             curEl.src = res.base64;
                             curData.hasThumb = true;
-                            console.log(`[thumb] ${curFname} FFmpeg 디코딩 완료`);
-                            this.hideError(curFname);
+                            console.log(`[thumb] ${curFkey} FFmpeg 디코딩 완료`);
+                            this.hideError(curFkey);
 
                             const bms = getBookmarksForVideo(curData.videoPath);
                             if (bms) {
-                                fetch('bookmark_thumb.php?cache=1', {
+                                return fetch('bookmark_thumb.php?cache=1', {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ path: curData.videoPath, time: seekTime, base64: res.base64 })
-                                }).catch(() => {});
+                                })
+                                    .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+                                    .then(j => { if (!j || j.ret !== true) throw new Error('save failed'); })
+                                    .catch(() => { curData.thumbSaveFails = (curData.thumbSaveFails || 0) + 1; });
                             }
-
-                            if (!singleFrameMode && isPageFocused && this.active.has(curFname)) this.tick(curFname, curEl);
                         })
-                        .catch(ex => { console.error(`thumb update error ${curFname}`, ex); this.showError(curFname, curEl); });
+                        .then(r => {
+                            if (r === 'skip') return;
+                            if ((curData.thumbSaveFails || 0) >= 3) {
+                                console.error(`thumb cache save 실패 ${curFkey} - 썸네일 회전 중단`);
+                                this.stop(curFkey);
+                                this.showError(curFkey, curEl);
+                                return;
+                            }
+                            if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) this.tick(curFkey, curEl);
+                        })
+                        .catch(ex => { console.error(`thumb update error ${curFkey}`, ex); this.showError(curFkey, curEl); });
                     });
             },
 
@@ -894,8 +1003,8 @@
                 thumbObserver.disconnect();
             },
             resumeAll() {
-                gridEl.querySelectorAll('img[data-fname]').forEach(img => {
-                    const f = img.dataset.fname;
+                gridEl.querySelectorAll('img[data-fkey]').forEach(img => {
+                    const f = img.dataset.fkey;
                     if (!this.active.has(f)) {
                         const d = storeOf(f);
                         if (singleFrameMode && d && d.hasThumb && !d.needVideoLoad) return;
@@ -907,7 +1016,7 @@
 
         const thumbObserver = new IntersectionObserver(entries => {
             entries.forEach(entry => {
-                const f = entry.target.dataset.fname;
+                const f = entry.target.dataset.fkey;
                 if (!f) return;
                 if (entry.isIntersecting) thumbMgr.start(f, entry.target);
                 else thumbMgr.stop(f);
@@ -918,8 +1027,8 @@
             mutations.forEach(m => {
                 m.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        const imgs = node.matches?.('img[data-fname]') ? [node] : Array.from(node.querySelectorAll?.('img[data-fname]') || []);
-                        imgs.forEach(img => thumbMgr.stop(img.dataset.fname));
+                        const imgs = node.matches?.('img[data-fkey]') ? [node] : Array.from(node.querySelectorAll?.('img[data-fkey]') || []);
+                        imgs.forEach(img => thumbMgr.stop(img.dataset.fkey));
                     }
                 });
             });
@@ -936,7 +1045,7 @@
         // ============================================================
         // VIDEO LOAD QUEUE
         // ============================================================
-        function storeOf(fname) { return makeitemStore[fname]; }
+        function storeOf(fkey) { return makeitemStore[fkey]; }
 
         async function processVideoLoadQueue() {
             while (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
@@ -961,39 +1070,55 @@
                 const videoPath = info.cacheKey || vid.src;
                 const fallbackDur = 60;
                 let videoDur = vid.duration;
-                if (!videoDur || !Number.isFinite(videoDur)) {
-                    await new Promise(res => vid.addEventListener('loadedmetadata', res, { once: true }));
-                    videoDur = vid.duration || fallbackDur;
+                let durKnown = !!(videoDur && Number.isFinite(videoDur));
+                if (!durKnown) {
+                    await new Promise(res => {
+                        const done = () => res();
+                        if (vid.readyState >= 1 && Number.isFinite(vid.duration)) { done(); return; }
+                        vid.addEventListener('loadedmetadata', done, { once: true });
+                        vid.addEventListener('error', done, { once: true });
+                        setTimeout(done, 4000);
+                    });
+                    videoDur = vid.duration;
+                    durKnown = !!(videoDur && Number.isFinite(videoDur));
+                    if (vid.error) {
+                        activeVideoLoads--;
+                        thumbMgr.showError(info.fkey, vid);
+                        continue;
+                    }
                 }
+                if (!durKnown) videoDur = fallbackDur;
+                info.durKnown = durKnown;
 
                 let seekTime;
-                const bm = pickBookmarkTime(videoPath, videoDur);
+                const bm = pickBookmarkTime(videoPath, durKnown ? videoDur : undefined);
                 if (bm) { seekTime = bm; }
                 else { seekTime = Math.random() * videoDur; if (seekTime < 30) seekTime = 30; }
 
                 const cacheUrl = `bookmark_thumb.php?path=${encodeURIComponent(videoPath)}&time=${seekTime}`;
-                console.log(`[thumb] ${info.fname} 초기 로드 캐시 시도 seek=${seekTime}`);
+                console.log(`[thumb] ${info.fkey} 초기 로드 캐시 시도 seek=${seekTime}`);
                 fetch(cacheUrl, { method: 'GET', cache: 'no-store' })
                     .then(r => { if (r.ok) return r.blob(); throw new Error('miss'); })
                     .then(blob => {
-                        console.log(`[thumb] ${info.fname} 초기 로드 캐시 이미지 완료`);
+                        console.log(`[thumb] ${info.fkey} 초기 로드 캐시 이미지 완료`);
                         applyThumbnail(info, vid, URL.createObjectURL(blob), videoDur, seekTime, fallbackDur);
                     })
                     .catch(() => {
-                        console.log(`[thumb] ${info.fname} 초기 로드 캐시 미스 - FFmpeg 디코딩 시작`);
+                        console.log(`[thumb] ${info.fkey} 초기 로드 캐시 미스 - FFmpeg 디코딩 시작`);
                         decodeAndApply(info, vid, videoPath, seekTime, videoDur, fallbackDur);
                     });
             }
         }
 
         function applyThumbnail(info, vid, imgSrc, dur, seekTime, fallbackDur) {
-            const data = storeOf(info.fname);
+            const data = storeOf(info.fkey);
             if (data) {
                 data.needVideoLoad = false;
                 data.hasThumb = true;
                 data.imgpath = imgSrc;
                 data.videoPath = info.cacheKey || vid.src;
                 data.videoDuration = dur;
+                data.videoDurationKnown = info.durKnown !== false;
                 data.currentSeekTime = parseFloat(seekTime);
             }
 
@@ -1006,12 +1131,12 @@
                 img.src = imgSrc;
                 img.style.cssText = 'position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;';
                 img.alt = 'Video thumbnail';
-                img.dataset.fname = info.fname;
+                img.dataset.fkey = info.fkey;
                 if (data && data.isVR) img.classList.add('vr-half');
                 img.draggable = false;
 
                 const bar = vid.parentElement.querySelector(`.vid-progress-bar[data-vidname="${CSS.escape(info.name)}"]`);
-                if (bar) bar.style.width = `${(parseFloat(seekTime) / dur) * 100}%`;
+                if (bar) bar.style.width = `${Math.min(100, (parseFloat(seekTime) / dur) * 100)}%`;
 
                 vid.parentElement.insertBefore(img, vid);
                 vid.remove();
@@ -1022,7 +1147,7 @@
         }
 
         function decodeAndApply(info, vid, videoPath, seekTime, dur, fallbackDur) {
-            console.log(`[thumb] ${info.fname} FFmpeg 디코딩 시작 seek=${seekTime}`);
+            console.log(`[thumb] ${info.fkey} FFmpeg 디코딩 시작 seek=${seekTime}`);
             fetch(`${getFfmpegUrl()}/decode`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1032,7 +1157,7 @@
             .then(res => {
                 if (!res.success || !res.base64 || res.base64.length < 100) return;
                 applyThumbnail(info, vid, res.base64, dur, seekTime, fallbackDur);
-                console.log(`[thumb] ${info.fname} FFmpeg 디코딩 완료`);
+                console.log(`[thumb] ${info.fkey} FFmpeg 디코딩 완료`);
                 const bms = getBookmarksForVideo(videoPath);
                 if (bms) {
                     fetch('bookmark_thumb.php?cache=1', {
@@ -1042,8 +1167,8 @@
                 }
             })
             .catch(ex => {
-                console.error(`decode error ${info.fname}`, ex);
-                if (vid && vid.parentElement) thumbMgr.showError(info.fname, vid);
+                console.error(`decode error ${info.fkey}`, ex);
+                if (vid && vid.parentElement) thumbMgr.showError(info.fkey, vid);
             })
             .finally(() => { activeVideoLoads--; processVideoLoadQueue(); });
         }
@@ -1051,23 +1176,24 @@
         // ============================================================
         // MAKE CARD HTML
         // ============================================================
-        async function makeCard(fname, text) {
+        async function makeCard(item) {
+            const { fname, base, fkey } = item;
             let itemEnterable = false, itemImg = false, imgpath = '';
             let itemVid = false, needVideoLoad = false, vidpath = '';
             let hasMp4 = false, hasVR = false, hasHighImageRatio = false;
             let dirImgs4 = [];
 
-            const cached = makeitemStore[fname];
+            const cached = makeitemStore[fkey];
             if (cached) {
                 return cached;
             }
 
-            const belowPath = `${parampath}/${fname}`;
+            const belowPath = fkey;
             let cacheKey = '';
 
             try {
                 let jsonData = null;
-                if (dirFlagMap[fname] !== false) {
+                if (dirFlagMap[fkey] !== false) {
                     jsonData = await dirseek(belowPath);
                 }
                 if (jsonData && jsonData.ret) {
@@ -1086,17 +1212,17 @@
                         // 랜덤 4장 선택 (2x2 사분할용)
                         const shuffled = dirImgs.slice().sort(() => Math.random() - 0.5);
                         const pickCount = Math.min(4, shuffled.length);
-                        dirImgs4 = shuffled.slice(0, pickCount).map(n => belowPath + '/' + encodeURIComponent(n));
+                        dirImgs4 = shuffled.slice(0, pickCount).map(n => joinPath(belowPath, encodeURIComponent(n)));
                         imgpath = dirImgs4[0];
                     }
                 } else {
                     const ext = fname.substring(fname.lastIndexOf('.') + 1).toLowerCase();
                     if (isImageExt(ext)) {
                         itemImg = true;
-                        imgpath = parampath + '/' + encodeURIComponent(fname);
+                        imgpath = joinPath(base, encodeURIComponent(fname));
                     } else if (ext === 'mp4' || ext === 'mov' || ext === 'mkv') {
                         itemVid = true;
-                        vidpath = parampath + '/' + encodeURIComponent(fname);
+                        vidpath = joinPath(base, encodeURIComponent(fname));
                         needVideoLoad = true;
                     }
                 }
@@ -1104,7 +1230,7 @@
 
             let isVR = false;
             if (itemVid) {
-                isVR = makeitemStore[fname]?.isVR;
+                isVR = makeitemStore[fkey]?.isVR;
                 if (typeof isVR !== 'boolean') {
                     isVR = await isVRVideo(vidpath, fname);
                 }
@@ -1113,17 +1239,17 @@
             const ratingVal = await getRating(fname);
 
             const entry = {
-                fname, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
+                fname, base, fkey, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
                 cacheKey, hasMp4, hasHighImageRatio, hasVR, isVR, rating: ratingVal,
                 dirImgs4,
                 hasThumb: false, progressBar: null, currentSeekTime: 0, videoDuration: null
             };
-            makeitemStore[fname] = entry;
+            makeitemStore[fkey] = entry;
             return entry;
         }
 
         function renderCard(item) {
-            const { fname, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
+            const { fname, base, fkey, itemEnterable, itemImg, imgpath, itemVid, needVideoLoad, vidpath,
                     hasMp4, hasVR, isVR, hasHighImageRatio, rating, dirImgs4 } = item;
 
             const card = document.createElement('div');
@@ -1135,9 +1261,9 @@
             let linksHtml = '';
             if (itemVid) {
                 const viewerPath = isVR ? getVRViewerPath() : 'videoview.html';
-                linksHtml += `<a href="${BASE_DIR}${viewerPath}?p=${encodeUriSafe(vidpath)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a>`;
+                linksHtml += `<a href="${BASE_DIR}${viewerPath}?p=${encodeUriSafe(fkey)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a>`;
             } else if (itemEnterable) {
-                const belowpath = `${parampath}/${fname}`;
+                const belowpath = fkey;
                 const belowEncoded = belowpath.split('/').map(encodeURIComponent).join('/');
                 if (hasHighImageRatio) {
                     linksHtml += `<a href="${BASE_DIR}imageview.html?p=${belowEncoded}" target="_blank"></a>`;
@@ -1147,22 +1273,26 @@
                 }
             }
 
-            // Badges
+            // Badges + favorite star (video items only — directory items have no favorite)
             let badgesHtml = '<div class="card-badges">';
+            if (itemVid) {
+                badgesHtml += `<div class="card-fav${favoritesSet.has(favNorm(fkey)) ? ' on' : ''}" data-fav-key="${escapeHtml(fkey)}" title="즐겨찾기">★</div>`;
+            }
+            badgesHtml += '<div class="card-badges-col">';
             if (hasMp4) {
-                badgesHtml += `<div class="cbadge cbadge-playvid">playvid<a href="${BASE_DIR}videoview.html?p=${encodeUriSafe(`${parampath}/${fname}`)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a></div>`;
+                badgesHtml += `<div class="cbadge cbadge-playvid">playvid<a href="${BASE_DIR}videoview.html?p=${encodeUriSafe(fkey)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a></div>`;
             }
             if (hasVR) {
-                badgesHtml += `<div class="cbadge cbadge-playvid180">playvid180<a href="${BASE_DIR}${getVRViewerPath()}?p=${encodeUriSafe(`${parampath}/${fname}`)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a></div>`;
+                badgesHtml += `<div class="cbadge cbadge-playvid180">playvid180<a href="${BASE_DIR}${getVRViewerPath()}?p=${encodeUriSafe(fkey)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a></div>`;
             }
-            badgesHtml += '</div>';
+            badgesHtml += '</div></div>';
 
             // Rating
             const ratingHtml = `
-                <div class="card-rating" data-rating-fname="${escapeHtml(fname)}">
-                    <div class="cr-btn" data-rating-action="up" data-rating-fname="${escapeHtml(fname)}">▲</div>
+                <div class="card-rating" data-rating-fname="${escapeHtml(fname)}" data-rating-fkey="${escapeHtml(fkey)}">
+                    <div class="cr-btn" data-rating-action="up" data-rating-fname="${escapeHtml(fname)}" data-rating-fkey="${escapeHtml(fkey)}">▲</div>
                     <div class="cr-val">${rating ?? 0}</div>
-                    <div class="cr-btn" data-rating-action="down" data-rating-fname="${escapeHtml(fname)}">▼</div>
+                    <div class="cr-btn" data-rating-action="down" data-rating-fname="${escapeHtml(fname)}" data-rating-fkey="${escapeHtml(fkey)}">▼</div>
                 </div>`;
 
             // Title
@@ -1170,7 +1300,7 @@
 
             // Image or Video
             let mediaHtml = '';
-            const cacheKeyForAttr = parampath + "/" + fname;
+            const cacheKeyForAttr = fkey;
             if (itemImg && itemEnterable && dirImgs4 && dirImgs4.length >= 4) {
                 // 폴더 카드: 2x2 사분할 이미지 (4장 이상)
                 mediaHtml = '<div class="card-grid4">';
@@ -1193,18 +1323,18 @@
             }
             if (needVideoLoad) {
                 const vrClass = isVR ? ' vr-half' : '';
-                mediaHtml = `<img src="${escapeHtml(imgpath)}" loading="lazy" alt="Cover" class="${vrClass}" data-fname="${escapeHtml(fname)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
-                mediaHtml += `<video muted src="${escapeHtml(vidpath)}" preload="metadata" data-fname="${escapeHtml(fname)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" style="position:absolute;width:100%;height:100%;object-fit:cover;"></video>`;
+                mediaHtml = `<img src="${escapeHtml(imgpath)}" loading="lazy" alt="Cover" class="${vrClass}" data-fkey="${escapeHtml(fkey)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
+                mediaHtml += `<video muted src="${escapeHtml(vidpath)}" preload="metadata" data-fkey="${escapeHtml(fkey)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" style="position:absolute;width:100%;height:100%;object-fit:cover;"></video>`;
             }
 
             inner.innerHTML = linksHtml + badgesHtml + ratingHtml + titleHtml + mediaHtml;
             card.appendChild(inner);
 
             // Observe thumbnail img
-            const thumbImg = inner.querySelector('img[data-fname]');
+            const thumbImg = inner.querySelector('img[data-fkey]');
             if (thumbImg) {
                 thumbObserver.observe(thumbImg);
-                thumbMgr.setupProgress(card, fname);
+                thumbMgr.setupProgress(card, fkey);
             }
 
             // Video queue
@@ -1214,7 +1344,7 @@
                 videoLoadQueue.push({
                     name: decodeURI(vidName),
                     element: vidEl,
-                    fname,
+                    fkey,
                     cacheKey: cacheKeyForAttr
                 });
             }
@@ -1229,25 +1359,30 @@
             const btn = e.target.closest('.cr-btn[data-rating-action]');
             if (!btn) return;
             const fname = btn.dataset.ratingFname;
-            if (!fname) return;
-            if (btn.dataset.ratingAction === 'up') onRatingUp(fname);
-            else onRatingDown(fname);
+            const fkey = btn.dataset.ratingFkey;
+            if (!fname || !fkey) return;
+            if (btn.dataset.ratingAction === 'up') onRatingUp(fkey, fname);
+            else onRatingDown(fkey, fname);
         });
 
-        async function onRatingUp(fname) {
-            const cur = makeitemStore[fname]?.rating ?? 0;
+        function storeEntriesByName(fname) {
+            return Object.values(makeitemStore).filter(e => e.fname === fname);
+        }
+
+        async function onRatingUp(fkey, fname) {
+            const cur = makeitemStore[fkey]?.rating ?? 0;
             const next = cur + 1;
             if (await setRating(fname, next)) {
-                if (makeitemStore[fname]) makeitemStore[fname].rating = next;
+                storeEntriesByName(fname).forEach(e => { e.rating = next; });
                 document.querySelectorAll(`[data-rating-fname="${fname}"] .cr-val`).forEach(el => { el.textContent = next; });
             }
         }
 
-        async function onRatingDown(fname) {
-            const cur = makeitemStore[fname]?.rating ?? 0;
+        async function onRatingDown(fkey, fname) {
+            const cur = makeitemStore[fkey]?.rating ?? 0;
             const next = cur - 1;
             if (await setRating(fname, next)) {
-                if (makeitemStore[fname]) makeitemStore[fname].rating = next;
+                storeEntriesByName(fname).forEach(e => { e.rating = next; });
                 document.querySelectorAll(`[data-rating-fname="${fname}"] .cr-val`).forEach(el => { el.textContent = next; });
             }
         }
@@ -1277,9 +1412,9 @@
             if (!placeholder || placeholder.dataset.rendered === '1') return;
             placeholder.dataset.rendered = '1';
             const item = dirlist[idx];
-            const cardData = await makeCard(item.fname, item.text);
+            const cardData = await makeCard(item);
             const card = renderCard(cardData);
-            card.dataset.itemFname = item.fname;
+            card.dataset.itemFkey = item.fkey;
             placeholder.replaceWith(card);
         }
 
@@ -1290,10 +1425,10 @@
             Array.from(gridEl.children).forEach((el, idx) => {
                 if (idx >= pruneStart && idx < pruneEnd) return;
                 if (el.dataset.rendered !== '1') return;
-                const fname = el.dataset.itemFname;
-                if (fname) {
+                const fkey = el.dataset.itemFkey;
+                if (fkey) {
                     el.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
-                    thumbMgr.stop(fname);
+                    thumbMgr.stop(fkey);
                 }
                 const ph = document.createElement('div');
                 ph.className = 'card';
@@ -1314,7 +1449,8 @@
 
             if (dirlist.length === 0) {
                 emptyState.style.display = 'block';
-                emptyTitle.textContent = parampathgiven ? `${parampath} 에 파일이 없습니다` : '디렉토리를 지정해주세요';
+                emptyTitle.textContent = activeFavMode ? '즐겨찾기 항목이 없습니다'
+                    : (parampathgiven ? `${parampath} 에 파일이 없습니다` : '디렉토리를 지정해주세요');
                 const overlay = document.getElementById('loading-overlay');
                 if (overlay && !overlay.classList.contains('hidden')) {
                     overlay.classList.add('hidden');
@@ -1329,9 +1465,9 @@
             for (let i = 0; i < dirlist.length; i++) {
                 if (i >= startIdx && i < endIdx) {
                     const item = dirlist[i];
-                    const cardData = await makeCard(item.fname, item.text);
+                    const cardData = await makeCard(item);
                     const card = renderCard(cardData);
-                    card.dataset.itemFname = item.fname;
+                    card.dataset.itemFkey = item.fkey;
                     card.dataset.rendered = '1';
                     fragment.appendChild(card);
                 } else {
@@ -1409,10 +1545,22 @@
         }
 
         let startupprocessing = false;
+        let startupRerun = false;
+        let activeFavMode = false;
         let initialToastShown = false;
         async function startup() {
-            if (startupprocessing) return;
+            if (startupprocessing) { startupRerun = true; return; }
             startupprocessing = true;
+            try {
+                await startupBody();
+            } finally {
+                startupprocessing = false;
+                if (startupRerun) { startupRerun = false; startup(); }
+            }
+        }
+        async function startupBody() {
+            const isFav = favMode;
+            activeFavMode = isFav;
             gridEl.innerHTML = '';
             thumbMgr.stopAll();
             thumbMgr.errors.clear();
@@ -1423,6 +1571,7 @@
             const loadProg = document.getElementById('loadingProgress');
 
             loadAllBookmarks();
+            await loadFavorites();
 
             const prefs = getPathPref();
             ordertype = prefs.order ?? localStorage.getItem('listordertype') ?? 1;
@@ -1433,6 +1582,7 @@
             updateSortButtons();
             updateRatingToggleBtn();
             updateSingleFrameBtn();
+            updateFavBtn();
 			
 			console.log(`ordertype - ${ordertype}`);
 			
@@ -1440,27 +1590,59 @@
                 initialToastShown = true;	
             }
 
-            if (loadProg) loadProg.textContent = '디렉토리 조회 중...';
-            const json = await dirseek(parampath);
-            if (!json.ret) {
-                emptyState.style.display = 'block';
-                emptyTitle.textContent = `${parampath} dirseek 오류`;
-                const overlay = document.getElementById('loading-overlay');
-                if (overlay && !overlay.classList.contains('hidden')) {
-                    overlay.classList.add('hidden');
-                    setTimeout(() => overlay.remove(), 400);
+            if (loadProg) loadProg.textContent = isFav ? '즐겨찾기 조회 중...' : '디렉토리 조회 중...';
+            let list = [];
+            if (isFav) {
+                try {
+                    const favRes = await fetch('favorite.php?all=1', { cache: 'no-store' });
+                    const favJson = await favRes.json();
+                    const favData = (favJson.ret && favJson.data) || {};
+                    // 범위: 현재 경로 하위 항목만 표시 (루트 진입 시 전체)
+                    const favScope = parampathgiven ? favNorm(parampath).replace(/\/+$/, '') : '';
+                    list = Object.keys(favData)
+                        .filter(path => !favScope || favNorm(path).startsWith(favScope + '/'))
+                        .map(path => ({
+                            d: path.substring(path.lastIndexOf('/') + 1),
+                            favPath: path,
+                            favCreated: favData[path]?.created ?? 0,
+                            favDir: typeof favData[path]?.dir === 'boolean' ? favData[path].dir : undefined
+                        }));
+                } catch (e) {
+                    console.error('favorites fetch failed', e);
+                    list = [];
                 }
-                return;
+            } else {
+                const json = await dirseek(parampath);
+                if (!json.ret) {
+                    emptyState.style.display = 'block';
+                    emptyTitle.textContent = `${parampath} dirseek 오류`;
+                    const overlay = document.getElementById('loading-overlay');
+                    if (overlay && !overlay.classList.contains('hidden')) {
+                        overlay.classList.add('hidden');
+                        setTimeout(() => overlay.remove(), 400);
+                    }
+                    return;
+                }
+                list = json.data;
             }
 
-            let list = json.data;
             dirFlagMap = {};
             dirlist = [];
 
             list.forEach(e => {
                 const name = e.d;
-                const time = Date.parse(e.t);
-                dirFlagMap[name] = (e.dir === true);
+                let fkey, base, time;
+                if (isFav) {
+                    fkey = e.favPath;
+                    base = splitPath(fkey).base;
+                    time = e.favCreated;
+                } else {
+                    base = parampath;
+                    fkey = joinPath(parampath, name);
+                    time = Date.parse(e.t);
+                }
+                const dirFlag = isFav ? e.favDir : e.dir;
+                if (dirFlag !== undefined) dirFlagMap[fkey] = dirFlag;
 
                 let ftext = name;
                 try {
@@ -1468,11 +1650,12 @@
                     if (p1 >= 0) { ftext = ftext.substring(p1 + 1); p1 = ftext.indexOf('/'); ftext = ftext.substring(0, p1); }
                 } catch (ex) { ftext = ''; }
 
-                dirlist.push({ fname: name, text: ftext, time });
+                dirlist.push({ fname: name, text: ftext, time, base, fkey });
             });
 
             if (paramfind != null) {
-                dirlist = dirlist.filter(x => x.fname.toUpperCase().includes(paramfind.toUpperCase()));
+                const q = paramfind.toUpperCase();
+                dirlist = dirlist.filter(x => (isFav ? x.fkey : x.fname).toUpperCase().includes(q));
             }
 
             if (dirlist.length > 0) {
@@ -1514,7 +1697,6 @@
             } catch (e) {
                 console.error('renderGrid error', e);
             }
-            startupprocessing = false;
 
             const overlay = document.getElementById('loading-overlay');
             if (overlay && !overlay.classList.contains('hidden')) {
@@ -1574,6 +1756,49 @@
 
         document.getElementById('btnBookmarks').addEventListener('click', () => {
             window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
+        });
+
+        // ============================================================
+        // FAVORITE SESSION (fav=1 URL 분기)
+        // ============================================================
+        function updateFavBtn() {
+            document.getElementById('btnFavorites').classList.toggle('active', favMode);
+        }
+
+        function setFavMode(on) {
+            if (on === favMode) return;
+            favMode = on;
+            const url = new URL(window.location.href);
+            if (on) url.searchParams.set('fav', '1');
+            else url.searchParams.delete('fav');
+            history.pushState({}, '', url);
+            window.scrollTo(0, 0);
+            updateFavBtn();
+            showToast(on ? '즐겨찾기 세션 진입' : '즐겨찾기 세션 이탈');
+            startup();
+        }
+
+        // 진입은 항상 새 탭 (토글 아님) — 현재 탭은 그대로 유지
+        function openFavSession() {
+            if (favMode) {
+                showToast('이미 즐겨찾기 세션입니다');
+                return;
+            }
+            const url = new URL(window.location.href);
+            url.searchParams.set('fav', '1');
+            window.open(url.toString(), '_blank');
+            showToast('즐겨찾기 세션 새 탭 열기');
+        }
+
+        document.getElementById('btnFavorites').addEventListener('click', openFavSession);
+
+        window.addEventListener('popstate', () => {
+            const on = new URL(window.location.href).searchParams.get('fav') === '1';
+            if (on !== favMode) {
+                favMode = on;
+                updateFavBtn();
+                startup();
+            }
         });
 
         document.getElementById('btnHelp').addEventListener('click', () => {
@@ -1638,6 +1863,8 @@
             } else if (e.key === 'b') {
                 showToast('북마크 열기');
                 window.open(`${BASE_DIR}bookmarks.html?p=${parampath || ''}`, '_blank');
+            } else if (e.key === 'f') {
+                openFavSession();
             } else if (e.key === '0') {
                 ratingordertoggle = !ratingordertoggle;
                 setPathPref({ ratingToggle: ratingordertoggle });
@@ -1652,6 +1879,7 @@
             } else if (e.key === '-') {
                 setCardSize(cardSizeIdx - 1);
             } else if (e.key === 'Backspace') {
+                if (favMode) { setFavMode(false); return; }
                 let link = window.location.href;
                 if (link.lastIndexOf('&f=') !== -1) {
                     window.location = link.substring(0, link.lastIndexOf('&f='));
