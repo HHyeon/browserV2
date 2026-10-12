@@ -886,6 +886,58 @@
         let activeVideoLoads = 0;
         const MAX_CONCURRENT_LOADS = 8;
         let videoLoadQueue = [];
+        // 공유 ffmpeg 디코딩 게이트 — tick/초기 로드 두 경로 공통, 동시 디코딩 상한
+        const MAX_DECODE_JOBS = 2;
+        const DECODE_TIMEOUT_MS = 25000;
+        let activeDecodeJobs = 0;
+        const decodeWaitQueue = [];
+        // 썸네일 회전 재요청 간격 — 연속 핫루프로 서버를 때리는 것 방지
+        const THUMB_TICK_INTERVAL_MS = 1000;
+
+        function requestDecode(videoPath, seekTime) {
+            return new Promise((resolve, reject) => {
+                decodeWaitQueue.push({ videoPath, seekTime, resolve, reject });
+                pumpDecodeQueue();
+            });
+        }
+
+        function pumpDecodeQueue() {
+            while (activeDecodeJobs < MAX_DECODE_JOBS && decodeWaitQueue.length > 0) {
+                const job = decodeWaitQueue.shift();
+                activeDecodeJobs++;
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), DECODE_TIMEOUT_MS);
+                fetch(`${getFfmpegUrl()}/decode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoPath: job.videoPath, seekTime: job.seekTime }),
+                    signal: ctrl.signal
+                })
+                    .then(r => { if (!r.ok) throw new Error(`FFmpeg ${r.status}`); return r.json(); })
+                    .then(job.resolve, job.reject)
+                    .finally(() => {
+                        clearTimeout(timer);
+                        activeDecodeJobs--;
+                        pumpDecodeQueue();
+                    });
+            }
+        }
+
+        window.__thumbQ = () => ({
+            active: activeVideoLoads,
+            queued: videoLoadQueue.length,
+            decodeActive: activeDecodeJobs,
+            decodeQueued: decodeWaitQueue.length
+        });
+
+        // 카드 링크에 현재 표시 중인 썸네일 시점(&t=) 동기화
+        function syncVideoLinkTime(fkey) {
+            const data = storeOf(fkey);
+            if (!data || !(data.currentSeekTime > 0)) return;
+            const a = gridEl.querySelector(`.card[data-item-fkey="${CSS.escape(fkey)}"] a[data-video-link]`);
+            if (!a || !a.dataset.hrefBase) return;
+            a.setAttribute('href', `${a.dataset.hrefBase}&t=${data.currentSeekTime}`);
+        }
 
         const thumbMgr = {
             active: new Map(),
@@ -953,16 +1005,16 @@
                         curEl.src = URL.createObjectURL(blob);
                         console.log(`[thumb] ${curFkey} 캐시 이미지 로드 완료`);
                         this.hideError(curFkey);
-                        if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) this.tick(curFkey, curEl);
+                        syncVideoLinkTime(curFkey);
+                        if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) {
+                            setTimeout(() => {
+                                if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) this.tick(curFkey, curEl);
+                            }, THUMB_TICK_INTERVAL_MS);
+                        }
                     })
                     .catch(() => {
                         console.log(`[thumb] ${curFkey} 캐시 미스 - FFmpeg 디코딩 시작 seek=${seekTime}`);
-                        fetch(`${getFfmpegUrl()}/decode`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ videoPath: curData.videoPath, seekTime })
-                        })
-                        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+                        requestDecode(curData.videoPath, seekTime)
                         .then(res => {
                             if (!res.success || !res.base64 || res.base64.length <= 100) return 'skip';
                             if (!curEl.isConnected) return 'skip';
@@ -970,6 +1022,7 @@
                             curData.hasThumb = true;
                             console.log(`[thumb] ${curFkey} FFmpeg 디코딩 완료`);
                             this.hideError(curFkey);
+                            syncVideoLinkTime(curFkey);
 
                             const bms = getBookmarksForVideo(curData.videoPath);
                             if (bms) {
@@ -990,7 +1043,11 @@
                                 this.showError(curFkey, curEl);
                                 return;
                             }
-                            if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) this.tick(curFkey, curEl);
+                            if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) {
+                                setTimeout(() => {
+                                    if (!singleFrameMode && isPageFocused && this.active.has(curFkey)) this.tick(curFkey, curEl);
+                                }, THUMB_TICK_INTERVAL_MS);
+                            }
                         })
                         .catch(ex => { console.error(`thumb update error ${curFkey}`, ex); this.showError(curFkey, curEl); });
                     });
@@ -1047,13 +1104,24 @@
         // ============================================================
         function storeOf(fkey) { return makeitemStore[fkey]; }
 
+        function releaseVideoSlot() {
+            activeVideoLoads--;
+            processVideoLoadQueue();
+        }
+
         async function processVideoLoadQueue() {
             while (videoLoadQueue.length > 0 && activeVideoLoads < MAX_CONCURRENT_LOADS) {
                 const info = videoLoadQueue.shift();
                 activeVideoLoads++;
+                let released = false;
+                const release = () => {
+                    if (released) return;
+                    released = true;
+                    releaseVideoSlot();
+                };
 
                 const vid = info.element;
-                if (!vid || !vid.parentElement) { activeVideoLoads--; continue; }
+                if (!vid || !vid.parentElement) { release(); continue; }
 
                 let progContainer = vid.parentElement.querySelector(`.vid-progress[data-vidname="${CSS.escape(info.name)}"]`);
                 if (!progContainer) {
@@ -1067,7 +1135,13 @@
                     vid.parentElement.insertBefore(progContainer, vid);
                 }
 
-                const videoPath = info.cacheKey || vid.src;
+                // 슬롯 확보 후에만 실제 미디어 요청 (렌더 시 preload=none, src 없음)
+                if (!vid.getAttribute('src') && vid.dataset.src) {
+                    vid.src = vid.dataset.src;
+                    vid.load();
+                }
+
+                const videoPath = info.cacheKey || vid.dataset.src || vid.src;
                 const fallbackDur = 60;
                 let videoDur = vid.duration;
                 let durKnown = !!(videoDur && Number.isFinite(videoDur));
@@ -1082,8 +1156,8 @@
                     videoDur = vid.duration;
                     durKnown = !!(videoDur && Number.isFinite(videoDur));
                     if (vid.error) {
-                        activeVideoLoads--;
                         thumbMgr.showError(info.fkey, vid);
+                        release();
                         continue;
                     }
                 }
@@ -1105,8 +1179,9 @@
                     })
                     .catch(() => {
                         console.log(`[thumb] ${info.fkey} 초기 로드 캐시 미스 - FFmpeg 디코딩 시작`);
-                        decodeAndApply(info, vid, videoPath, seekTime, videoDur, fallbackDur);
-                    });
+                        return decodeAndApply(info, vid, videoPath, seekTime, videoDur, fallbackDur);
+                    })
+                    .finally(release);
             }
         }
 
@@ -1116,16 +1191,20 @@
                 data.needVideoLoad = false;
                 data.hasThumb = true;
                 data.imgpath = imgSrc;
-                data.videoPath = info.cacheKey || vid.src;
+                data.videoPath = info.cacheKey || vid.dataset.src || vid.src;
                 data.videoDuration = dur;
                 data.videoDurationKnown = info.durKnown !== false;
                 data.currentSeekTime = parseFloat(seekTime);
+                syncVideoLinkTime(info.fkey);
             }
 
             if (vid.parentElement) {
                 vid.pause();
                 vid.removeAttribute('src');
                 vid.load();
+
+                // 기존 플레이스홀더 img 제거 — 카드당 썸네일 img 중복 방지
+                Array.from(vid.parentElement.querySelectorAll('img[data-fkey]')).forEach(el => el.remove());
 
                 const img = document.createElement('img');
                 img.src = imgSrc;
@@ -1148,14 +1227,9 @@
 
         function decodeAndApply(info, vid, videoPath, seekTime, dur, fallbackDur) {
             console.log(`[thumb] ${info.fkey} FFmpeg 디코딩 시작 seek=${seekTime}`);
-            fetch(`${getFfmpegUrl()}/decode`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ videoPath, seekTime })
-            })
-            .then(r => { if (!r.ok) throw new Error(`FFmpeg ${r.status}`); return r.json(); })
+            return requestDecode(videoPath, seekTime)
             .then(res => {
-                if (!res.success || !res.base64 || res.base64.length < 100) return;
+                if (!res || !res.success || !res.base64 || res.base64.length < 100) return;
                 applyThumbnail(info, vid, res.base64, dur, seekTime, fallbackDur);
                 console.log(`[thumb] ${info.fkey} FFmpeg 디코딩 완료`);
                 const bms = getBookmarksForVideo(videoPath);
@@ -1169,8 +1243,7 @@
             .catch(ex => {
                 console.error(`decode error ${info.fkey}`, ex);
                 if (vid && vid.parentElement) thumbMgr.showError(info.fkey, vid);
-            })
-            .finally(() => { activeVideoLoads--; processVideoLoadQueue(); });
+            });
         }
 
         // ============================================================
@@ -1261,7 +1334,9 @@
             let linksHtml = '';
             if (itemVid) {
                 const viewerPath = isVR ? getVRViewerPath() : 'videoview.html';
-                linksHtml += `<a href="${BASE_DIR}${viewerPath}?p=${encodeUriSafe(fkey)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}" target="_blank"></a>`;
+                const baseHref = `${BASE_DIR}${viewerPath}?p=${encodeUriSafe(fkey)}${paramfind != null ? `&f=${encodeURIComponent(paramfind)}` : ''}`;
+                const t0 = item.currentSeekTime > 0 ? item.currentSeekTime : 0;
+                linksHtml += `<a href="${escapeHtml(baseHref + (t0 ? `&t=${t0}` : ''))}" data-video-link data-href-base="${escapeHtml(baseHref)}" target="_blank"></a>`;
             } else if (itemEnterable) {
                 const belowpath = fkey;
                 const belowEncoded = belowpath.split('/').map(encodeURIComponent).join('/');
@@ -1324,7 +1399,11 @@
             if (needVideoLoad) {
                 const vrClass = isVR ? ' vr-half' : '';
                 mediaHtml = `<img src="${escapeHtml(imgpath)}" loading="lazy" alt="Cover" class="${vrClass}" data-fkey="${escapeHtml(fkey)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
-                mediaHtml += `<video muted src="${escapeHtml(vidpath)}" preload="metadata" data-fkey="${escapeHtml(fkey)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" style="position:absolute;width:100%;height:100%;object-fit:cover;"></video>`;
+                mediaHtml += `<video muted preload="none" data-src="${escapeHtml(vidpath)}" data-fkey="${escapeHtml(fkey)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" style="position:absolute;width:100%;height:100%;object-fit:cover;"></video>`;
+            } else if (itemVid && item.hasThumb && item.imgpath) {
+                // 변환 완료된 카드 재렌더(스크롤 프룬 복귀): 정적 썸네일만 표시
+                const vrClass = isVR ? ' vr-half' : '';
+                mediaHtml = `<img src="${escapeHtml(item.imgpath)}" loading="lazy" alt="Video thumbnail" class="${vrClass}" data-fkey="${escapeHtml(fkey)}" data-cache-key="${escapeHtml(cacheKeyForAttr)}" draggable="false" style="position:absolute;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;">`;
             }
 
             inner.innerHTML = linksHtml + badgesHtml + ratingHtml + titleHtml + mediaHtml;
@@ -1337,12 +1416,11 @@
                 thumbMgr.setupProgress(card, fkey);
             }
 
-            // Video queue
+            // Video queue (src는 큐에서 슬롯 확보 후에만 부여)
             const vidEl = inner.querySelector('video');
             if (vidEl) {
-                const vidName = vidEl.src.substring(vidEl.src.lastIndexOf('/') + 1);
                 videoLoadQueue.push({
-                    name: decodeURI(vidName),
+                    name: fname,
                     element: vidEl,
                     fkey,
                     cacheKey: cacheKeyForAttr
@@ -1416,6 +1494,8 @@
             const card = renderCard(cardData);
             card.dataset.itemFkey = item.fkey;
             placeholder.replaceWith(card);
+            // 스크롤 진입분은 이 경로로만 push됨 — 큐가 멈춰있으면 여기서 재가동
+            processVideoLoadQueue();
         }
 
         function pruneOffscreen() {
